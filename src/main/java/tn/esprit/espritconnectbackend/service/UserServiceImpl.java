@@ -1,4 +1,4 @@
-package tn.esprit.espritconnectbackend.service.Admin;
+package tn.esprit.espritconnectbackend.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,12 +12,10 @@ import tn.esprit.espritconnectbackend.repositories.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AdminServiceImpl implements IAdminService {
-
+public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
 
     @Override
@@ -33,7 +31,7 @@ public class AdminServiceImpl implements IAdminService {
         log.info("Mise à jour du statut de l'utilisateur {} vers {}", userId, status);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouvé avec l'ID : " + userId));
-        
+
         user.setStatus(status);
         userRepository.save(user);
     }

@@ -1,4 +1,4 @@
-package tn.esprit.espritconnectbackend.service.Admin;
+package tn.esprit.espritconnectbackend.service;
 
 import tn.esprit.espritconnectbackend.dto.UserDTO;
 import tn.esprit.espritconnectbackend.entities.enums.UserRole;
@@ -7,7 +7,7 @@ import tn.esprit.espritconnectbackend.entities.enums.UserStatus;
 import java.util.List;
 import java.util.UUID;
 
-public interface IAdminService {
+public interface UserService {
     List<UserDTO> getUsersByRole(UserRole role);
     void updateUserStatus(UUID userId, UserStatus status);
 }

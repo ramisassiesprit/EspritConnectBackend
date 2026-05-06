@@ -3,6 +3,9 @@ package tn.esprit.espritconnectbackend.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.espritconnectbackend.dto.UserDTO;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.UserRole;
@@ -12,11 +15,51 @@ import tn.esprit.espritconnectbackend.repositories.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
+    private final AuditService auditService;
+
+    @Override
+    public UserDTO getCurrentUser() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé : " + email));
+        return mapToDTO(user);
+    }
+
+    @Override
+    @Transactional
+    public UserDTO updateProfile(UserDTO userDTO) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé : " + email));
+
+        user.setFirstName(userDTO.getFirstName());
+        user.setLastName(userDTO.getLastName());
+        user.setBio(userDTO.getBio());
+        user.setCity(userDTO.getCity());
+        user.setCountry(userDTO.getCountry());
+        user.setLinkedinUrl(userDTO.getLinkedinUrl());
+        user.setGithubUrl(userDTO.getGithubUrl());
+        user.setPortfolioUrl(userDTO.getPortfolioUrl());
+        user.setAvatarUrl(userDTO.getAvatarUrl());
+        user.setBannerUrl(userDTO.getBannerUrl());
+        
+        User savedUser = userRepository.save(user);
+        auditService.logAction("UPDATE_PROFILE", "USER", savedUser.getId(), "Profil mis à jour");
+        return mapToDTO(savedUser);
+    }
+
+    @Override
+    public List<UserDTO> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
 
     @Override
     public List<UserDTO> getUsersByRole(UserRole role) {
@@ -27,6 +70,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void updateUserStatus(UUID userId, UserStatus status) {
         log.info("Mise à jour du statut de l'utilisateur {} vers {}", userId, status);
         User user = userRepository.findById(userId)
@@ -34,6 +78,14 @@ public class UserServiceImpl implements UserService {
 
         user.setStatus(status);
         userRepository.save(user);
+        auditService.logAction("UPDATE_STATUS", "USER", userId, "Statut changé en " + status);
+    }
+
+    @Override
+    @Transactional
+    public void deleteUser(UUID userId) {
+        userRepository.deleteById(userId);
+        auditService.logAction("DELETE_USER", "USER", userId, "Utilisateur supprimé par l'admin");
     }
 
     private UserDTO mapToDTO(User user) {

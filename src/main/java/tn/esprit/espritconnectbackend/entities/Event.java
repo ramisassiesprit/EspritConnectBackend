@@ -36,7 +36,7 @@ public class Event {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "event_type")
+    @Column(name = "event_type", length = 50)
     private EventType eventType;
 
     @Column(length = 255)
@@ -59,16 +59,29 @@ public class Event {
     private Boolean waitlistEnabled = false;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     @Builder.Default
     private EventStatus status = EventStatus.DRAFT;
 
     @Column(name = "cover_url")
     private String coverUrl;
 
+    @Column(name = "registered_count")
+    @Builder.Default
+    private Integer registeredCount = 0;
+
     @Column(name = "created_at", updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at")
+    @Builder.Default
+    private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @PreUpdate
+    private void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     // ── Relations ──────────────────────────────────────────────────────────────
 

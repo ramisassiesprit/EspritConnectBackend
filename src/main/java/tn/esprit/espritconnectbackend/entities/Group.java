@@ -44,7 +44,7 @@ public class Group {
     private String bannerUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     @Builder.Default
     private GroupPrivacy privacy = GroupPrivacy.PUBLIC;
 

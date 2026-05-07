@@ -36,7 +36,7 @@ public class MentoringRequest {
     private String message;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     @Builder.Default
     private MentoringStatus status = MentoringStatus.PENDING;
 

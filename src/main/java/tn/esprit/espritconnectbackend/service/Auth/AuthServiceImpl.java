@@ -50,31 +50,30 @@ public class AuthServiceImpl implements AuthService {
         // Par défaut, tous les nouveaux comptes sont PENDING
         UserStatus initialStatus = UserStatus.PENDING;
 
-        User user = User.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .role(request.getRole())
-                .status(initialStatus)
-                .build();
+        User user = new User();
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setEmail(request.getEmail());
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setRole(request.getRole());
+        user.setStatus(initialStatus);
 
         userRepository.save(user);
         log.info("Nouvel utilisateur enregistré : {} ({}) avec le statut {}", user.getEmail(), user.getRole(), initialStatus);
 
         // Si le compte n'est pas actif, on ne retourne pas de token
         if (initialStatus != UserStatus.ACTIVE) {
-            return AuthenticationResponse.builder().build();
+            return new AuthenticationResponse();
         }
 
         String accessToken = jwtService.generateAccessToken(user);
         
-        return AuthenticationResponse.builder()
-                .accessToken(accessToken)
-                .userId(user.getId())
-                .role(user.getRole())
-                .expiresIn(jwtExpiration)
-                .build();
+        AuthenticationResponse authResponse = new AuthenticationResponse();
+        authResponse.setAccessToken(accessToken);
+        authResponse.setUserId(user.getId());
+        authResponse.setRole(user.getRole());
+        authResponse.setExpiresIn(jwtExpiration);
+        return authResponse;
     }
 
     @Override
@@ -109,12 +108,14 @@ public class AuthServiceImpl implements AuthService {
         setRefreshTokenCookie(response, refreshToken, (int) (refreshExpiration / 1000));
 
         log.info("Connexion réussie pour l'utilisateur : {}", user.getEmail());
-        return AuthenticationResponse.builder()
-                .accessToken(accessToken)
-                .userId(user.getId())
-                .role(user.getRole())
-                .expiresIn(jwtExpiration)
-                .build();
+        
+        AuthenticationResponse authResponse = new AuthenticationResponse();
+        authResponse.setAccessToken(accessToken);
+        authResponse.setRefreshToken(refreshToken);
+        authResponse.setUserId(user.getId());
+        authResponse.setRole(user.getRole());
+        authResponse.setExpiresIn(jwtExpiration);
+        return authResponse;
     }
 
     @Override
@@ -137,12 +138,13 @@ public class AuthServiceImpl implements AuthService {
                 String newRefreshToken = jwtService.generateRefreshToken(user);
                 setRefreshTokenCookie(response, newRefreshToken, (int) (refreshExpiration / 1000));
 
-                return AuthenticationResponse.builder()
-                        .accessToken(accessToken)
-                        .userId(user.getId())
-                        .role(user.getRole())
-                        .expiresIn(jwtExpiration)
-                        .build();
+                AuthenticationResponse authResponse = new AuthenticationResponse();
+                authResponse.setAccessToken(accessToken);
+                authResponse.setRefreshToken(newRefreshToken);
+                authResponse.setUserId(user.getId());
+                authResponse.setRole(user.getRole());
+                authResponse.setExpiresIn(jwtExpiration);
+                return authResponse;
             }
         }
         throw new IllegalArgumentException("Refresh token invalide");
@@ -204,6 +206,4 @@ public class AuthServiceImpl implements AuthService {
         }
         return null;
     }
-
-
 }

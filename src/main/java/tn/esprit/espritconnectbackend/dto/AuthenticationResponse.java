@@ -18,5 +18,6 @@ public class AuthenticationResponse {
     private String tokenType = "Bearer";
     private UUID userId;
     private UserRole role;
+    private String refreshToken;
     private long expiresIn;
 }

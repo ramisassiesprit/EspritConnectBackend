@@ -21,14 +21,12 @@ public class AuditService {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userRepository.findByEmail(email).orElse(null);
 
-        AuditLog log = AuditLog.builder()
-                .user(user)
-                .action(action)
-                .targetType(targetType)
-                .targetId(targetId)
-                .metadata(metadata)
-                .build();
-
+        AuditLog log = new AuditLog();
+        log.setUser(user);
+        log.setAction(action);
+        log.setTargetType(targetType);
+        log.setTargetId(targetId);
+        log.setMetadata("{\"message\": \"" + metadata + "\"}"); 
         auditLogRepository.save(log);
     }
 }

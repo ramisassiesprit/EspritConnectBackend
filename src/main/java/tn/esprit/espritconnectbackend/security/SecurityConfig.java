@@ -48,6 +48,7 @@ public class SecurityConfig {
                         "/webjars/**",
                         "/swagger-ui.html"
                 ).permitAll()
+                .requestMatchers("/profile/**").authenticated()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

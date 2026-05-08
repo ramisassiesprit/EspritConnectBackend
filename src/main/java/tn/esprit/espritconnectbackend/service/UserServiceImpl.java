@@ -45,9 +45,10 @@ public class UserServiceImpl implements UserService {
         user.setCountry(userDTO.getCountry());
         user.setLinkedinUrl(userDTO.getLinkedinUrl());
         user.setGithubUrl(userDTO.getGithubUrl());
-        user.setPortfolioUrl(userDTO.getPortfolioUrl());
+        user.setFacebookUrl(userDTO.getFacebookUrl());
         user.setAvatarUrl(userDTO.getAvatarUrl());
         user.setBannerUrl(userDTO.getBannerUrl());
+        user.setNumTel(userDTO.getNumTel());
         
         User savedUser = userRepository.save(user);
         auditService.logAction("UPDATE_PROFILE", "USER", savedUser.getId(), "Profil mis à jour");
@@ -62,7 +63,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserDTO> getUsersByRole(UserRole role) {
+    public List<UserDTO> getUsersByRole(tn.esprit.espritconnectbackend.entities.enums.UserRole role) {
         log.info("Récupération des utilisateurs avec le rôle : {}", role);
         return userRepository.findByRole(role).stream()
                 .map(this::mapToDTO)
@@ -103,12 +104,13 @@ public class UserServiceImpl implements UserService {
         dto.setCountry(user.getCountry());
         dto.setLinkedinUrl(user.getLinkedinUrl());
         dto.setGithubUrl(user.getGithubUrl());
-        dto.setPortfolioUrl(user.getPortfolioUrl());
+        dto.setFacebookUrl(user.getFacebookUrl());
         dto.setIsMentor(user.getIsMentor());
         dto.setMentorAvailable(user.getMentorAvailable());
         dto.setLastLoginAt(user.getLastLoginAt());
         dto.setCreatedAt(user.getCreatedAt());
         dto.setUpdatedAt(user.getUpdatedAt());
+        dto.setNumTel(user.getNumTel());
         return dto;
     }
 }

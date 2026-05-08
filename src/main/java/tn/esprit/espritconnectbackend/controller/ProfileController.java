@@ -73,6 +73,12 @@ public class ProfileController {
         return ResponseEntity.ok(profileService.getMySkills());
     }
 
+    @DeleteMapping("/skills/{id}")
+    public ResponseEntity<Void> deleteSkill(@PathVariable UUID id) {
+        profileService.removeSkill(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // --- Connections ---
     @PostMapping("/connections/request/{userId}")
     public ResponseEntity<ConnectionDTO> sendRequest(@PathVariable UUID userId) {

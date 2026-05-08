@@ -26,8 +26,9 @@ public class UserDTO {
     @Email(message = "Email invalide")
     private String email;
 
-    private UserRole role;
+    private tn.esprit.espritconnectbackend.entities.enums.UserRole role;
     private UserStatus status;
+    private Integer numTel;
     private String avatarUrl;
     private String bannerUrl;
     private String bio;
@@ -35,7 +36,7 @@ public class UserDTO {
     private String country;
     private String linkedinUrl;
     private String githubUrl;
-    private String portfolioUrl;
+    private String facebookUrl;
     private Boolean isMentor;
     private Boolean mentorAvailable;
     private LocalDateTime lastLoginAt;

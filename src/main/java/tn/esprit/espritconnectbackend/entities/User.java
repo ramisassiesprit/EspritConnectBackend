@@ -52,10 +52,13 @@ public class User implements UserDetails {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(name = "avatar_url")
+    @Column(name="num_tel")
+    private Integer numTel;
+
+    @Column(name = "avatar_url", columnDefinition = "LONGTEXT")
     private String avatarUrl;
 
-    @Column(name = "banner_url")
+    @Column(name = "banner_url", columnDefinition = "LONGTEXT")
     private String bannerUrl;
 
     @Column(columnDefinition = "TEXT")
@@ -73,8 +76,9 @@ public class User implements UserDetails {
     @Column(name = "github_url")
     private String githubUrl;
 
-    @Column(name = "portfolio_url")
-    private String portfolioUrl;
+    @Column(name = "facebook_url")
+    private String facebookUrl;
+
 
     @Column(name = "is_mentor")
     @Builder.Default

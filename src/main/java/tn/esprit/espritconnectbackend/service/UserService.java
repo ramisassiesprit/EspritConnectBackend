@@ -14,7 +14,7 @@ public interface UserService {
     
     // Admin CRUD
     List<UserDTO> getAllUsers();
-    List<UserDTO> getUsersByRole(UserRole role);
+    List<UserDTO> getUsersByRole(tn.esprit.espritconnectbackend.entities.enums.UserRole role);
     void updateUserStatus(UUID userId, UserStatus status);
     void deleteUser(UUID userId);
 }

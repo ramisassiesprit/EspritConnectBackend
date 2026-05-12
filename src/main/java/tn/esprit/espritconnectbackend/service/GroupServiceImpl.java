@@ -9,6 +9,7 @@ import tn.esprit.espritconnectbackend.dto.GroupDTO;
 import tn.esprit.espritconnectbackend.dto.GroupMemberDTO;
 import tn.esprit.espritconnectbackend.entities.Group;
 import tn.esprit.espritconnectbackend.entities.GroupMember;
+import tn.esprit.espritconnectbackend.entities.GroupMemberCriteria;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.GroupMemberRole;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
@@ -50,6 +51,27 @@ public class GroupServiceImpl implements GroupService {
         group.setWebsite(groupDTO.getWebsite());
         group.setLogoUrl(groupDTO.getLogoUrl());
         group.setBannerUrl(groupDTO.getBannerUrl());
+        group.setTagging(groupDTO.getTagging() != null ? groupDTO.getTagging() : false);
+        group.setLabels(groupDTO.getLabels());
+
+        GroupMemberCriteria criteria = new GroupMemberCriteria();
+        criteria.setGroup(group);
+        criteria.setLocation(groupDTO.getLocation());
+        criteria.setAffiliation(groupDTO.getAffiliation());
+        criteria.setFieldOfStudy(groupDTO.getFieldOfStudy());
+        criteria.setDegree(groupDTO.getDegree());
+        criteria.setGraduationYear(groupDTO.getGraduationYear());
+        criteria.setInstitutionProgram(groupDTO.getInstitutionProgram());
+        criteria.setOtherDegree(groupDTO.getOtherDegree());
+        criteria.setOtherGraduationYear(groupDTO.getOtherGraduationYear());
+        criteria.setCompany(groupDTO.getCompany());
+        criteria.setIndustry(groupDTO.getIndustry());
+        criteria.setJobFunction(groupDTO.getJobFunction());
+        criteria.setWillingOffering(groupDTO.getWillingOffering());
+        criteria.setWillingSeeking(groupDTO.getWillingSeeking());
+        criteria.setMentoringOffering(groupDTO.getMentoringOffering());
+        criteria.setMentoringSeeking(groupDTO.getMentoringSeeking());
+        group.setMemberCriteria(criteria);
         
         Group savedGroup = groupRepository.save(group);
         
@@ -77,6 +99,28 @@ public class GroupServiceImpl implements GroupService {
         group.setWebsite(groupDTO.getWebsite());
         group.setLogoUrl(groupDTO.getLogoUrl());
         group.setBannerUrl(groupDTO.getBannerUrl());
+        group.setTagging(groupDTO.getTagging() != null ? groupDTO.getTagging() : group.getTagging());
+        group.setLabels(groupDTO.getLabels());
+
+        if (group.getMemberCriteria() == null) {
+            group.setMemberCriteria(new GroupMemberCriteria());
+            group.getMemberCriteria().setGroup(group);
+        }
+        group.getMemberCriteria().setLocation(groupDTO.getLocation());
+        group.getMemberCriteria().setAffiliation(groupDTO.getAffiliation());
+        group.getMemberCriteria().setFieldOfStudy(groupDTO.getFieldOfStudy());
+        group.getMemberCriteria().setDegree(groupDTO.getDegree());
+        group.getMemberCriteria().setGraduationYear(groupDTO.getGraduationYear());
+        group.getMemberCriteria().setInstitutionProgram(groupDTO.getInstitutionProgram());
+        group.getMemberCriteria().setOtherDegree(groupDTO.getOtherDegree());
+        group.getMemberCriteria().setOtherGraduationYear(groupDTO.getOtherGraduationYear());
+        group.getMemberCriteria().setCompany(groupDTO.getCompany());
+        group.getMemberCriteria().setIndustry(groupDTO.getIndustry());
+        group.getMemberCriteria().setJobFunction(groupDTO.getJobFunction());
+        group.getMemberCriteria().setWillingOffering(groupDTO.getWillingOffering());
+        group.getMemberCriteria().setWillingSeeking(groupDTO.getWillingSeeking());
+        group.getMemberCriteria().setMentoringOffering(groupDTO.getMentoringOffering());
+        group.getMemberCriteria().setMentoringSeeking(groupDTO.getMentoringSeeking());
         
         Group updatedGroup = groupRepository.save(group);
         auditService.logAction("UPDATE_GROUP", "GROUP", updatedGroup.getId(), "Groupe mis à jour");
@@ -215,6 +259,26 @@ public class GroupServiceImpl implements GroupService {
         dto.setCreatorId(group.getCreator().getId());
         dto.setCreatedAt(group.getCreatedAt());
         dto.setUpdatedAt(group.getUpdatedAt());
+
+        if (group.getMemberCriteria() != null) {
+            dto.setLocation(group.getMemberCriteria().getLocation());
+            dto.setAffiliation(group.getMemberCriteria().getAffiliation());
+            dto.setFieldOfStudy(group.getMemberCriteria().getFieldOfStudy());
+            dto.setDegree(group.getMemberCriteria().getDegree());
+            dto.setGraduationYear(group.getMemberCriteria().getGraduationYear());
+            dto.setInstitutionProgram(group.getMemberCriteria().getInstitutionProgram());
+            dto.setOtherDegree(group.getMemberCriteria().getOtherDegree());
+            dto.setOtherGraduationYear(group.getMemberCriteria().getOtherGraduationYear());
+            dto.setCompany(group.getMemberCriteria().getCompany());
+            dto.setIndustry(group.getMemberCriteria().getIndustry());
+            dto.setJobFunction(group.getMemberCriteria().getJobFunction());
+            dto.setWillingOffering(group.getMemberCriteria().getWillingOffering());
+            dto.setWillingSeeking(group.getMemberCriteria().getWillingSeeking());
+            dto.setMentoringOffering(group.getMemberCriteria().getMentoringOffering());
+            dto.setMentoringSeeking(group.getMemberCriteria().getMentoringSeeking());
+        }
+        dto.setLabels(group.getLabels());
+        dto.setTagging(group.getTagging());
         return dto;
     }
 

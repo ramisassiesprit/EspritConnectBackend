@@ -50,7 +50,9 @@ public class SecurityConfig {
                         "/swagger-ui.html",
                         "/ws-chat/**",
                         "/users",
-                        "/users/**"
+                        "/users/**",
+                        "/ws-chat/**",
+                        "/groupsImages/**"
                 ).permitAll()
                 .requestMatchers("/profile/**").authenticated()
                 .anyRequest().authenticated()

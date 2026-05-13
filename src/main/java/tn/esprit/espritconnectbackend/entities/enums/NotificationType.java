@@ -12,6 +12,7 @@ public enum NotificationType {
     MENTORING_ACCEPTED,
     MESSAGE_RECEIVED,
     GROUP_INVITE,
+    GROUP_JOIN,
     NEWSLETTER,
     SYSTEM
 }

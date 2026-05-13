@@ -1,14 +1,16 @@
-package tn.esprit.espritconnectbackend.service.impl;
+package tn.esprit.espritconnectbackend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.espritconnectbackend.dto.UserDTO;
 import tn.esprit.espritconnectbackend.dto.WillingToHelpDTO;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.WillingToHelp;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 import tn.esprit.espritconnectbackend.repositories.WillingToHelpRepository;
-import tn.esprit.espritconnectbackend.service.WillingToHelpService;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,13 +24,16 @@ public class WillingToHelpServiceImpl implements WillingToHelpService {
     private final WillingToHelpRepository willingToHelpRepository;
     private final UserRepository userRepository;
 
+
+    private User getCurrentUserEntity() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+    }
     @Override
     public WillingToHelpDTO create(WillingToHelpDTO willingToHelpDTO) {
-        User user = userRepository.findById(willingToHelpDTO.getUserId())
-                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         WillingToHelp willingToHelp = WillingToHelp.builder()
-                .user(user)
+                .user(getCurrentUserEntity())
                 .offerHelp(willingToHelpDTO.getOfferHelp())
                 .seekHelp(willingToHelpDTO.getSeekHelp())
                 .offerMentor(willingToHelpDTO.getOfferMentor())
@@ -93,7 +98,6 @@ public class WillingToHelpServiceImpl implements WillingToHelpService {
     private WillingToHelpDTO mapToDTO(WillingToHelp willingToHelp) {
         WillingToHelpDTO dto = new WillingToHelpDTO();
         dto.setId(willingToHelp.getId());
-        dto.setUserId(willingToHelp.getUser().getId());
         dto.setOfferHelp(willingToHelp.getOfferHelp());
         dto.setSeekHelp(willingToHelp.getSeekHelp());
         dto.setOfferMentor(willingToHelp.getOfferMentor());
@@ -101,4 +105,3 @@ public class WillingToHelpServiceImpl implements WillingToHelpService {
         return dto;
     }
 }
-

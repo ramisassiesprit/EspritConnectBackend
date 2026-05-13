@@ -8,4 +8,5 @@ import java.util.UUID;
 
 public interface WillingToHelpRepository extends JpaRepository<WillingToHelp, UUID> {
     List<WillingToHelp> findByUser(User user);
+    List<WillingToHelp> findByUserId(UUID userId);
 }

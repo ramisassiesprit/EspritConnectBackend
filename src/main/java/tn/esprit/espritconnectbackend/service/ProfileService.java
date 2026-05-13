@@ -28,6 +28,7 @@ public interface ProfileService {
 
     // WillingToHelp
     WillingToHelpDTO addWillingToHelp(WillingToHelpDTO dto);
+    WillingToHelpDTO updateWillingToHelp(UUID id, WillingToHelpDTO dto);
     void deleteWillingToHelp(UUID id);
     List<WillingToHelpDTO> getMyWillingToHelps();
 

@@ -27,6 +27,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final ConnectionRepository connectionRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final BadgeService badgeService;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -52,6 +53,7 @@ public class ProfileServiceImpl implements ProfileService {
         
         profile = profileRepository.save(profile);
         auditService.logAction("UPDATE_ESPRIT_PROFILE", "PROFILE", profile.getId(), "Mise à jour du profil académique");
+        badgeService.checkAndAwardBadges(user);
         return mapToDTO(profile);
     }
 
@@ -186,9 +188,26 @@ public class ProfileServiceImpl implements ProfileService {
         User user = getCurrentUserEntity();
         WillingToHelp help = new WillingToHelp();
         help.setUser(user);
-        help.setOffering(dto.getOffering());
-        help.setSeeking(dto.getSeeking());
-        return mapToDTO(helpRepository.save(help));
+        help.setOfferHelp(dto.getOfferHelp());
+        help.setSeekHelp(dto.getSeekHelp());
+        help.setOfferMentor(dto.getOfferMentor());
+        help.setSeekMentor(dto.getSeekMentor());
+        WillingToHelp saved = helpRepository.save(help);
+        badgeService.checkAndAwardBadges(user);
+        return mapToDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public WillingToHelpDTO updateWillingToHelp(UUID id, WillingToHelpDTO dto) {
+        WillingToHelp help = helpRepository.findById(id).orElseThrow();
+        help.setOfferHelp(dto.getOfferHelp());
+        help.setSeekHelp(dto.getSeekHelp());
+        help.setOfferMentor(dto.getOfferMentor());
+        help.setSeekMentor(dto.getSeekMentor());
+        WillingToHelp saved = helpRepository.save(help);
+        badgeService.checkAndAwardBadges(saved.getUser());
+        return mapToDTO(saved);
     }
 
     @Override
@@ -277,8 +296,10 @@ public class ProfileServiceImpl implements ProfileService {
     private WillingToHelpDTO mapToDTO(WillingToHelp h) {
         WillingToHelpDTO dto = new WillingToHelpDTO();
         dto.setId(h.getId());
-        dto.setOffering(h.getOffering());
-        dto.setSeeking(h.getSeeking());
+        dto.setOfferHelp(h.getOfferHelp());
+        dto.setSeekHelp(h.getSeekHelp());
+        dto.setOfferMentor(h.getOfferMentor());
+        dto.setSeekMentor(h.getSeekMentor());
         return dto;
     }
 

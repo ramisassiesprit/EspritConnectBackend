@@ -64,11 +64,6 @@ public class User implements UserDetails {
     @Column(columnDefinition = "TEXT")
     private String bio;
 
-    @Column(length = 100)
-    private String city;
-
-    @Column(length = 100)
-    private String country;
 
     @Column(name = "linkedin_url")
     private String linkedinUrl;
@@ -78,7 +73,20 @@ public class User implements UserDetails {
 
     @Column(name = "facebook_url")
     private String facebookUrl;
+    @Column(length = 100, unique = true)
+    private String code;
 
+    @Column(name = "company_name", length = 255)
+    private String companyName;
+
+    @Column(name = "job_title", length = 100)
+    private String jobTitle;
+
+    @Column(length = 100)
+    private String industry;
+
+    @Column(name = "job_function", length = 100)
+    private String jobFunction;
 
     @Column(name = "is_mentor")
     @Builder.Default
@@ -178,6 +186,10 @@ public class User implements UserDetails {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AuditLog> auditLogs;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<UserBadge> userBadges = new java.util.ArrayList<>();
 
     @PreUpdate
     private void onUpdate() {

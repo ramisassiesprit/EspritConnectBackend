@@ -96,6 +96,11 @@ public class ProfileController {
         return ResponseEntity.ok(profileService.addWillingToHelp(dto));
     }
 
+    @PutMapping("/help/{id}")
+    public ResponseEntity<WillingToHelpDTO> updateHelp(@PathVariable UUID id, @Valid @RequestBody WillingToHelpDTO dto) {
+        return ResponseEntity.ok(profileService.updateWillingToHelp(id, dto));
+    }
+
     @GetMapping("/help")
     public ResponseEntity<List<WillingToHelpDTO>> getMyHelps() {
         return ResponseEntity.ok(profileService.getMyWillingToHelps());

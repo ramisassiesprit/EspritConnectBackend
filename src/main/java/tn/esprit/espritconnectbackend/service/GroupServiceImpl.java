@@ -2,6 +2,7 @@ package tn.esprit.espritconnectbackend.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,7 @@ import tn.esprit.espritconnectbackend.entities.GroupMember;
 import tn.esprit.espritconnectbackend.entities.GroupMemberCriteria;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.GroupMemberRole;
+import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
 import tn.esprit.espritconnectbackend.repositories.GroupMemberRepository;
 import tn.esprit.espritconnectbackend.repositories.GroupRepository;
@@ -31,6 +33,7 @@ public class GroupServiceImpl implements GroupService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final FileStorageService fileStorageService;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -81,6 +84,20 @@ public class GroupServiceImpl implements GroupService {
         auditService.logAction("CREATE_GROUP", "GROUP", savedGroup.getId(), "Groupe créé : " + savedGroup.getGroupName());
         
         return mapToDTO(savedGroup);
+    }
+
+    @Override
+    @Transactional
+    public GroupDTO createGroupWithFiles(GroupDTO groupDTO, MultipartFile logoFile, MultipartFile bannerFile) throws java.io.IOException {
+        if (logoFile != null && !logoFile.isEmpty()) {
+            String logoUrl = fileStorageService.saveFile(logoFile, "icons");
+            groupDTO.setLogoUrl(logoUrl);
+        }
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String bannerUrl = fileStorageService.saveFile(bannerFile, "banners");
+            groupDTO.setBannerUrl(bannerUrl);
+        }
+        return createGroup(groupDTO);
     }
 
     @Override
@@ -200,6 +217,57 @@ public class GroupServiceImpl implements GroupService {
         // Update member count
         group.setMembersCount(group.getMembersCount() - 1);
         groupRepository.save(group);
+    }
+
+    @Override
+    @Transactional
+    public void leaveGroup(UUID groupId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+        
+        User currentUser = getCurrentUserEntity();
+        
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, currentUser)
+                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce groupe"));
+        
+        groupMemberRepository.delete(member);
+        
+        // Update member count
+        group.setMembersCount(group.getMembersCount() - 1);
+        groupRepository.save(group);
+        
+        auditService.logAction("LEAVE_GROUP", "GROUP", groupId, "Utilisateur a quitté le groupe");
+    }
+
+    @Override
+    @Transactional
+    public GroupMemberDTO joinGroup(UUID groupId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+        
+        User currentUser = getCurrentUserEntity();
+        
+        // Check if user is already a member
+        if (groupMemberRepository.existsByGroupAndUser(group, currentUser)) {
+            throw new RuntimeException("Vous êtes déjà membre de ce groupe");
+        }
+
+        
+        GroupMember member = addMemberToGroupEntity(group, currentUser, GroupMemberRole.MEMBER);
+        
+        // Notify user
+        notificationService.createNotification(
+            currentUser, 
+            "Groupe rejoint", 
+            "Vous avez rejoint le groupe : " + group.getGroupName(), 
+            NotificationType.GROUP_JOIN, 
+            "GROUP",
+            group.getId()
+        );
+        
+        auditService.logAction("JOIN_GROUP", "GROUP", groupId, "Utilisateur a rejoint le groupe");
+        
+        return mapToMemberDTO(member);
     }
 
     @Override

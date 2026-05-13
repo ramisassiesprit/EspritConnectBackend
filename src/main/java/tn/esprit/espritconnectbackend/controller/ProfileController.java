@@ -111,4 +111,36 @@ public class ProfileController {
         profileService.deleteWillingToHelp(id);
         return ResponseEntity.noContent().build();
     }
+
+    // ── Public endpoints (by user ID) ─────────────────────────────────────────
+
+    @GetMapping("/users/{userId}/esprit")
+    @Operation(summary = "Récupérer le profil académique d'un utilisateur")
+    public ResponseEntity<EspritProfileDTO> getEspritProfileByUserId(@PathVariable UUID userId) {
+        return ResponseEntity.ok(profileService.getEspritProfileByUserId(userId));
+    }
+
+    @GetMapping("/users/{userId}/experience")
+    @Operation(summary = "Récupérer les expériences d'un utilisateur")
+    public ResponseEntity<List<WorkExperienceDTO>> getWorkExperiencesByUserId(@PathVariable UUID userId) {
+        return ResponseEntity.ok(profileService.getWorkExperiencesByUserId(userId));
+    }
+
+    @GetMapping("/users/{userId}/education")
+    @Operation(summary = "Récupérer les formations d'un utilisateur")
+    public ResponseEntity<List<OtherEducationDTO>> getEducationsByUserId(@PathVariable UUID userId) {
+        return ResponseEntity.ok(profileService.getEducationsByUserId(userId));
+    }
+
+    @GetMapping("/users/{userId}/skills")
+    @Operation(summary = "Récupérer les compétences d'un utilisateur")
+    public ResponseEntity<List<SkillDTO>> getSkillsByUserId(@PathVariable UUID userId) {
+        return ResponseEntity.ok(profileService.getSkillsByUserId(userId));
+    }
+
+    @GetMapping("/users/{userId}/help")
+    @Operation(summary = "Récupérer les aides proposées par un utilisateur")
+    public ResponseEntity<List<WillingToHelpDTO>> getWillingToHelpsByUserId(@PathVariable UUID userId) {
+        return ResponseEntity.ok(profileService.getWillingToHelpsByUserId(userId));
+    }
 }

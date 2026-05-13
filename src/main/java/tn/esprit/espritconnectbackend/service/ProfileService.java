@@ -32,6 +32,13 @@ public interface ProfileService {
     void deleteWillingToHelp(UUID id);
     List<WillingToHelpDTO> getMyWillingToHelps();
 
+    // Public profile by userId
+    EspritProfileDTO getEspritProfileByUserId(UUID userId);
+    List<WorkExperienceDTO> getWorkExperiencesByUserId(UUID userId);
+    List<OtherEducationDTO> getEducationsByUserId(UUID userId);
+    List<SkillDTO> getSkillsByUserId(UUID userId);
+    List<WillingToHelpDTO> getWillingToHelpsByUserId(UUID userId);
+
     // Connections
     ConnectionDTO sendConnectionRequest(UUID targetUserId);
     ConnectionDTO acceptConnectionRequest(UUID connectionId);

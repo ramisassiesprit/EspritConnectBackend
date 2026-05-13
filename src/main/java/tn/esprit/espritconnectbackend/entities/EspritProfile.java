@@ -25,8 +25,7 @@ public class EspritProfile {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Column(name = "student_number", length = 50)
-    private String studentNumber;
+
 
     @Column(name = "field_of_study", length = 150)
     private String fieldOfStudy;

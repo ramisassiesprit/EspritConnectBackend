@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.espritconnectbackend.dto.BadgeDTO;
 import tn.esprit.espritconnectbackend.entities.Badge;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.UserBadge;
@@ -15,6 +16,7 @@ import tn.esprit.espritconnectbackend.repositories.UserBadgeRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,16 +37,33 @@ public class BadgeServiceImpl implements BadgeService {
 
     private void createBadgeIfNotFound(String name, String description, String type) {
         if (badgeRepository.findByName(name).isEmpty()) {
-            Badge badge = Badge.builder()
-                    .name(name)
-                    .description(description)
-                    .type(type)
-                    .build();
+            Badge badge = new Badge();
+            badge.setName(name);
+            badge.setDescription(description);
+            badge.setType(type);
             badgeRepository.save(badge);
             log.info("Badge créé : {}", name);
         }
     }
+    @Override
+    @Transactional(readOnly = true)
+    public List<BadgeDTO> getUserBadges(UUID userId) {
+        log.info("Récupération des badges pour l'utilisateur : {}", userId);
 
+        List<UserBadge> userBadges = userBadgeRepository.findByUserId(userId);
+
+        return userBadges.stream()
+                .map(ub -> {
+                    BadgeDTO dto = new BadgeDTO();
+                    dto.setId(ub.getId());
+                    dto.setName(ub.getBadge().getName());
+                    dto.setDescription(ub.getBadge().getDescription());
+                    dto.setType(ub.getBadge().getType());
+                    dto.setEarnedAt(ub.getEarnedAt());
+                    return dto;
+                })
+                .toList();
+    }
     @Override
     @Transactional
     public void checkAndAwardBadges(User user) {
@@ -83,11 +102,10 @@ public class BadgeServiceImpl implements BadgeService {
     }
 
     private void awardBadge(User user, Badge badge) {
-        UserBadge userBadge = UserBadge.builder()
-                .user(user)
-                .badge(badge)
-                .earnedAt(LocalDateTime.now())
-                .build();
+        UserBadge userBadge = new UserBadge();
+        userBadge.setUser(user);
+        userBadge.setBadge(badge);
+        userBadge.setEarnedAt(LocalDateTime.now());
         userBadgeRepository.save(userBadge);
         log.info("Badge '{}' attribué à l'utilisateur : {}", badge.getName(), user.getEmail());
     }
@@ -114,7 +132,6 @@ public class BadgeServiceImpl implements BadgeService {
         // EspritProfile fields
         if (user.getEspritProfile() != null) {
             tn.esprit.espritconnectbackend.entities.EspritProfile profile = user.getEspritProfile();
-            fields.add(profile.getStudentNumber());
             fields.add(profile.getFieldOfStudy());
             fields.add(profile.getDegree());
             fields.add(profile.getGraduationYear());

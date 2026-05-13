@@ -44,7 +44,6 @@ public class ProfileServiceImpl implements ProfileService {
             profile = new EspritProfile();
             profile.setUser(user);
         }
-        profile.setStudentNumber(dto.getStudentNumber());
         profile.setFieldOfStudy(dto.getFieldOfStudy());
         profile.setDegree(dto.getDegree());
         profile.setGraduationYear(dto.getGraduationYear());
@@ -257,11 +256,54 @@ public class ProfileServiceImpl implements ProfileService {
                 .map(this::mapToDTO).collect(Collectors.toList());
     }
 
+    // ── Public by userId ─────────────────────────────────────────────────────
+
+    @Override
+    public EspritProfileDTO getEspritProfileByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        EspritProfile profile = user.getEspritProfile();
+        if (profile == null) return new EspritProfileDTO();
+        return mapToDTO(profile);
+    }
+
+    @Override
+    public List<WorkExperienceDTO> getWorkExperiencesByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return experienceRepository.findByUser(user).stream()
+                .map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OtherEducationDTO> getEducationsByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return educationRepository.findByUser(user).stream()
+                .map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<SkillDTO> getSkillsByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return user.getSkills().stream()
+                .map(s -> { SkillDTO dto = new SkillDTO(); dto.setId(s.getId()); dto.setName(s.getName()); return dto; })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<WillingToHelpDTO> getWillingToHelpsByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return helpRepository.findByUser(user).stream()
+                .map(this::mapToDTO).collect(Collectors.toList());
+    }
+
     // Mapping Helpers
     private EspritProfileDTO mapToDTO(EspritProfile p) {
         EspritProfileDTO dto = new EspritProfileDTO();
         dto.setId(p.getId());
-        dto.setStudentNumber(p.getStudentNumber());
         dto.setFieldOfStudy(p.getFieldOfStudy());
         dto.setDegree(p.getDegree());
         dto.setGraduationYear(p.getGraduationYear());

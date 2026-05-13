@@ -55,5 +55,6 @@ public class UserDTO {
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isOnline;
     private java.util.List<BadgeDTO> badges;
 }

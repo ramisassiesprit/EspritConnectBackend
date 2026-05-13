@@ -23,9 +23,16 @@ public class ChatController {
     @MessageMapping("/chat.sendMessage")
     public void processMessage(@Payload MessageDTO messageDTO) {
         MessageDTO savedMsg = messageService.sendMessage(messageDTO);
-        // Send to the specific receiver's queue
+        
+        // Send to the receiver's queue
         messagingTemplate.convertAndSendToUser(
                 messageDTO.getReceiverId().toString(), "/queue/messages",
+                savedMsg
+        );
+        
+        // Also send back to the sender to confirm and sync (timestamp, ID)
+        messagingTemplate.convertAndSendToUser(
+                messageDTO.getSenderId().toString(), "/queue/messages",
                 savedMsg
         );
     }

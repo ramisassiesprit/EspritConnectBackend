@@ -62,6 +62,13 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserDTO getUserById(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec l'ID : " + userId));
+        return mapToDTO(user);
+    }
+
+    @Override
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::mapToDTO)
@@ -87,12 +94,28 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         auditService.logAction("UPDATE_STATUS", "USER", userId, "Statut changé en " + status);
     }
-
     @Override
-    @Transactional
     public void deleteUser(UUID userId) {
         userRepository.deleteById(userId);
-        auditService.logAction("DELETE_USER", "USER", userId, "Utilisateur supprimé par l'admin");
+    }
+    @Override
+    public List<UserDTO> getOnlineUsers() {
+        String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByIsOnlineTrue().stream()
+                .filter(user -> !user.getEmail().equals(currentEmail))
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<UserDTO> getDirectoryUsers() {
+        String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findAll().stream()
+                .filter(user -> user.getRole() != UserRole.ADMIN)
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                .filter(user -> !user.getEmail().equals(currentEmail))
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
     }
 
     private UserDTO mapToDTO(User user) {
@@ -120,6 +143,7 @@ public class UserServiceImpl implements UserService {
         dto.setCreatedAt(user.getCreatedAt());
         dto.setUpdatedAt(user.getUpdatedAt());
         dto.setNumTel(user.getNumTel());
+        dto.setIsOnline(user.getIsOnline());
         if (user.getUserBadges() != null) {
             dto.setBadges(user.getUserBadges().stream()
                 .map(ub -> BadgeDTO.builder()

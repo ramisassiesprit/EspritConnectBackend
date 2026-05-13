@@ -32,8 +32,21 @@ public class UserDTO {
     private String avatarUrl;
     private String bannerUrl;
     private String bio;
-    private String city;
-    private String country;
+    @NotBlank(message = "Le code est obligatoire")
+    @Size(max = 100)
+    private String code;
+
+    @Size(max = 255)
+    private String companyName;
+
+    @Size(max = 100)
+    private String jobTitle;
+
+    @Size(max = 100)
+    private String industry;
+
+    @Size(max = 100)
+    private String jobFunction;
     private String linkedinUrl;
     private String githubUrl;
     private String facebookUrl;
@@ -42,4 +55,6 @@ public class UserDTO {
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isOnline;
+    private java.util.List<BadgeDTO> badges;
 }

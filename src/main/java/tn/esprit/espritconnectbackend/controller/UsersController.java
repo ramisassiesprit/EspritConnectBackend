@@ -37,6 +37,24 @@ public class UsersController {
         return ResponseEntity.ok(userService.updateProfile(userDTO));
     }
 
+    @GetMapping("/online")
+    @Operation(summary = "Récupérer la liste des utilisateurs en ligne")
+    public ResponseEntity<List<UserDTO>> getOnlineUsers() {
+        return ResponseEntity.ok(userService.getOnlineUsers());
+    }
+
+    @GetMapping("/directory")
+    @Operation(summary = "Récupérer la liste des utilisateurs pour le répertoire (accessible à tous)")
+    public ResponseEntity<List<UserDTO>> getDirectoryUsers() {
+        return ResponseEntity.ok(userService.getDirectoryUsers());
+    }
+
+    @GetMapping("/{userId}")
+    @Operation(summary = "Récupérer le profil d'un utilisateur par son ID")
+    public ResponseEntity<UserDTO> getUserById(@PathVariable UUID userId) {
+        return ResponseEntity.ok(userService.getUserById(userId));
+    }
+
     // --- Gestion Admin ---
 
     @PreAuthorize("hasRole('ADMIN')")

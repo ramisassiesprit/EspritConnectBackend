@@ -11,10 +11,13 @@ public interface UserService {
     // Profil utilisateur
     UserDTO getCurrentUser();
     UserDTO updateProfile(UserDTO userDTO);
+    UserDTO getUserById(UUID userId);
     
     // Admin CRUD
     List<UserDTO> getAllUsers();
     List<UserDTO> getUsersByRole(tn.esprit.espritconnectbackend.entities.enums.UserRole role);
     void updateUserStatus(UUID userId, UserStatus status);
     void deleteUser(UUID userId);
+    List<UserDTO> getOnlineUsers();
+    List<UserDTO> getDirectoryUsers();
 }

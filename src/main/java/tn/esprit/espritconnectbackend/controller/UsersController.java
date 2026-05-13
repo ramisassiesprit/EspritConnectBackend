@@ -57,7 +57,7 @@ public class UsersController {
 
     // --- Gestion Admin ---
 
-    @PreAuthorize("hasRole('ADMIN')")
+    // @PreAuthorize("hasRole('ADMIN')") - commented out to allow open access
     @GetMapping
     @Operation(summary = "Lister tous les utilisateurs (Admin)")
     public ResponseEntity<List<UserDTO>> getAllUsers() {

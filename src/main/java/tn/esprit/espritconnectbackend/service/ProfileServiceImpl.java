@@ -27,6 +27,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final ConnectionRepository connectionRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final BadgeService badgeService;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -43,7 +44,6 @@ public class ProfileServiceImpl implements ProfileService {
             profile = new EspritProfile();
             profile.setUser(user);
         }
-        profile.setStudentNumber(dto.getStudentNumber());
         profile.setFieldOfStudy(dto.getFieldOfStudy());
         profile.setDegree(dto.getDegree());
         profile.setGraduationYear(dto.getGraduationYear());
@@ -52,6 +52,7 @@ public class ProfileServiceImpl implements ProfileService {
         
         profile = profileRepository.save(profile);
         auditService.logAction("UPDATE_ESPRIT_PROFILE", "PROFILE", profile.getId(), "Mise à jour du profil académique");
+        badgeService.checkAndAwardBadges(user);
         return mapToDTO(profile);
     }
 
@@ -186,9 +187,26 @@ public class ProfileServiceImpl implements ProfileService {
         User user = getCurrentUserEntity();
         WillingToHelp help = new WillingToHelp();
         help.setUser(user);
-        help.setOffering(dto.getOffering());
-        help.setSeeking(dto.getSeeking());
-        return mapToDTO(helpRepository.save(help));
+        help.setOfferHelp(dto.getOfferHelp());
+        help.setSeekHelp(dto.getSeekHelp());
+        help.setOfferMentor(dto.getOfferMentor());
+        help.setSeekMentor(dto.getSeekMentor());
+        WillingToHelp saved = helpRepository.save(help);
+        badgeService.checkAndAwardBadges(user);
+        return mapToDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public WillingToHelpDTO updateWillingToHelp(UUID id, WillingToHelpDTO dto) {
+        WillingToHelp help = helpRepository.findById(id).orElseThrow();
+        help.setOfferHelp(dto.getOfferHelp());
+        help.setSeekHelp(dto.getSeekHelp());
+        help.setOfferMentor(dto.getOfferMentor());
+        help.setSeekMentor(dto.getSeekMentor());
+        WillingToHelp saved = helpRepository.save(help);
+        badgeService.checkAndAwardBadges(saved.getUser());
+        return mapToDTO(saved);
     }
 
     @Override
@@ -238,11 +256,54 @@ public class ProfileServiceImpl implements ProfileService {
                 .map(this::mapToDTO).collect(Collectors.toList());
     }
 
+    // ── Public by userId ─────────────────────────────────────────────────────
+
+    @Override
+    public EspritProfileDTO getEspritProfileByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        EspritProfile profile = user.getEspritProfile();
+        if (profile == null) return new EspritProfileDTO();
+        return mapToDTO(profile);
+    }
+
+    @Override
+    public List<WorkExperienceDTO> getWorkExperiencesByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return experienceRepository.findByUser(user).stream()
+                .map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OtherEducationDTO> getEducationsByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return educationRepository.findByUser(user).stream()
+                .map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<SkillDTO> getSkillsByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return user.getSkills().stream()
+                .map(s -> { SkillDTO dto = new SkillDTO(); dto.setId(s.getId()); dto.setName(s.getName()); return dto; })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<WillingToHelpDTO> getWillingToHelpsByUserId(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        return helpRepository.findByUser(user).stream()
+                .map(this::mapToDTO).collect(Collectors.toList());
+    }
+
     // Mapping Helpers
     private EspritProfileDTO mapToDTO(EspritProfile p) {
         EspritProfileDTO dto = new EspritProfileDTO();
         dto.setId(p.getId());
-        dto.setStudentNumber(p.getStudentNumber());
         dto.setFieldOfStudy(p.getFieldOfStudy());
         dto.setDegree(p.getDegree());
         dto.setGraduationYear(p.getGraduationYear());
@@ -277,8 +338,10 @@ public class ProfileServiceImpl implements ProfileService {
     private WillingToHelpDTO mapToDTO(WillingToHelp h) {
         WillingToHelpDTO dto = new WillingToHelpDTO();
         dto.setId(h.getId());
-        dto.setOffering(h.getOffering());
-        dto.setSeeking(h.getSeeking());
+        dto.setOfferHelp(h.getOfferHelp());
+        dto.setSeekHelp(h.getSeekHelp());
+        dto.setOfferMentor(h.getOfferMentor());
+        dto.setSeekMentor(h.getSeekMentor());
         return dto;
     }
 

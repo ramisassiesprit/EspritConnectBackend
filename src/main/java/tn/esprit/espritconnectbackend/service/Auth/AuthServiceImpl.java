@@ -46,6 +46,10 @@ public class AuthServiceImpl implements AuthService {
             log.warn("Tentative d'inscription avec un email déjà existant : {}", request.getEmail());
             throw new IllegalArgumentException("Un compte avec cet email existe déjà.");
         }
+        if (request.getCode() != null && userRepository.findByCode(request.getCode()).isPresent()) {
+            log.warn("Tentative d'inscription avec un code déjà existant : {}", request.getCode());
+            throw new IllegalArgumentException("Un compte avec ce code existe déjà.");
+        }
 
         // Par défaut, tous les nouveaux comptes sont PENDING
         UserStatus initialStatus = UserStatus.PENDING;
@@ -102,6 +106,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user.setLastLoginAt(LocalDateTime.now());
+        user.setIsOnline(true);
         userRepository.save(user);
 
         String accessToken = jwtService.generateAccessToken(user);
@@ -161,6 +166,19 @@ public class AuthServiceImpl implements AuthService {
         cookie.setPath("/");
         cookie.setMaxAge(0);
         response.addCookie(cookie);
+
+        // Update online status if possible
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String jwt = authHeader.substring(7);
+            String userEmail = jwtService.extractUsername(jwt);
+            if (userEmail != null) {
+                userRepository.findByEmail(userEmail).ifPresent(user -> {
+                    user.setIsOnline(false);
+                    userRepository.save(user);
+                });
+            }
+        }
     }
 
     @Override

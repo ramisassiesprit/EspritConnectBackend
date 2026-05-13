@@ -4,16 +4,17 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "willing_to_help")
+@Table(name = "user_badges")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class WillingToHelp {
+public class UserBadge {
 
     @Id
     @GeneratedValue
@@ -25,15 +26,11 @@ public class WillingToHelp {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "offer_help", length = 255)
-    private String offerHelp;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "badge_id", nullable = false)
+    private Badge badge;
 
-    @Column(name = "seek_help", length = 255)
-    private String seekHelp;
-
-    @Column(name = "offer_mentor", length = 255)
-    private String offerMentor;
-
-    @Column(name = "seek_mentor", length = 255)
-    private String seekMentor;
+    @Column(name = "earned_at", nullable = false)
+    @Builder.Default
+    private LocalDateTime earnedAt = LocalDateTime.now();
 }

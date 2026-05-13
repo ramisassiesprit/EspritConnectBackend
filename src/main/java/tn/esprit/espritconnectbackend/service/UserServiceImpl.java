@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.espritconnectbackend.dto.BadgeDTO;
 import tn.esprit.espritconnectbackend.dto.UserDTO;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.UserRole;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final BadgeService badgeService;
 
     @Override
     public UserDTO getCurrentUser() {
@@ -41,8 +43,11 @@ public class UserServiceImpl implements UserService {
         user.setFirstName(userDTO.getFirstName());
         user.setLastName(userDTO.getLastName());
         user.setBio(userDTO.getBio());
-        user.setCity(userDTO.getCity());
-        user.setCountry(userDTO.getCountry());
+        user.setCode(userDTO.getCode());
+        user.setCompanyName(userDTO.getCompanyName());
+        user.setJobTitle(userDTO.getJobTitle());
+        user.setIndustry(userDTO.getIndustry());
+        user.setJobFunction(userDTO.getJobFunction());
         user.setLinkedinUrl(userDTO.getLinkedinUrl());
         user.setGithubUrl(userDTO.getGithubUrl());
         user.setFacebookUrl(userDTO.getFacebookUrl());
@@ -52,7 +57,15 @@ public class UserServiceImpl implements UserService {
         
         User savedUser = userRepository.save(user);
         auditService.logAction("UPDATE_PROFILE", "USER", savedUser.getId(), "Profil mis à jour");
+        badgeService.checkAndAwardBadges(savedUser);
         return mapToDTO(savedUser);
+    }
+
+    @Override
+    public UserDTO getUserById(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec l'ID : " + userId));
+        return mapToDTO(user);
     }
 
     @Override
@@ -81,12 +94,28 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         auditService.logAction("UPDATE_STATUS", "USER", userId, "Statut changé en " + status);
     }
-
     @Override
-    @Transactional
     public void deleteUser(UUID userId) {
         userRepository.deleteById(userId);
-        auditService.logAction("DELETE_USER", "USER", userId, "Utilisateur supprimé par l'admin");
+    }
+    @Override
+    public List<UserDTO> getOnlineUsers() {
+        String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByIsOnlineTrue().stream()
+                .filter(user -> !user.getEmail().equals(currentEmail))
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<UserDTO> getDirectoryUsers() {
+        String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findAll().stream()
+                .filter(user -> user.getRole() != UserRole.ADMIN)
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                .filter(user -> !user.getEmail().equals(currentEmail))
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
     }
 
     private UserDTO mapToDTO(User user) {
@@ -100,8 +129,11 @@ public class UserServiceImpl implements UserService {
         dto.setAvatarUrl(user.getAvatarUrl());
         dto.setBannerUrl(user.getBannerUrl());
         dto.setBio(user.getBio());
-        dto.setCity(user.getCity());
-        dto.setCountry(user.getCountry());
+        dto.setCode(user.getCode());
+        dto.setCompanyName(user.getCompanyName());
+        dto.setJobTitle(user.getJobTitle());
+        dto.setIndustry(user.getIndustry());
+        dto.setJobFunction(user.getJobFunction());
         dto.setLinkedinUrl(user.getLinkedinUrl());
         dto.setGithubUrl(user.getGithubUrl());
         dto.setFacebookUrl(user.getFacebookUrl());
@@ -111,6 +143,19 @@ public class UserServiceImpl implements UserService {
         dto.setCreatedAt(user.getCreatedAt());
         dto.setUpdatedAt(user.getUpdatedAt());
         dto.setNumTel(user.getNumTel());
+        dto.setIsOnline(user.getIsOnline());
+        if (user.getUserBadges() != null) {
+            dto.setBadges(user.getUserBadges().stream()
+                .map(ub -> BadgeDTO.builder()
+                    .id(ub.getBadge().getId())
+                    .name(ub.getBadge().getName())
+                    .description(ub.getBadge().getDescription())
+                    .iconUrl(ub.getBadge().getIconUrl())
+                    .type(ub.getBadge().getType())
+                    .earnedAt(ub.getEarnedAt())
+                    .build())
+                .collect(java.util.stream.Collectors.toList()));
+        }
         return dto;
     }
 }

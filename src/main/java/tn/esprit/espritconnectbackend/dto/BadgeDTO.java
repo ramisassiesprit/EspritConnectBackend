@@ -12,12 +12,11 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MessageDTO {
+public class BadgeDTO {
     private UUID id;
-    private UUID senderId;
-    private String senderName;
-    private UUID receiverId;
-    private String content;
-    private Boolean isRead;
-    private LocalDateTime sentAt;
+    private String name;
+    private String description;
+    private String iconUrl;
+    private String type;
+    private LocalDateTime earnedAt;
 }

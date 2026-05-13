@@ -8,8 +8,7 @@ import java.util.UUID;
 public class EspritProfileDTO {
     private UUID id;
     
-    @NotBlank(message = "Le numéro d'étudiant est obligatoire")
-    private String studentNumber;
+
     
     @NotBlank(message = "Le domaine d'étude est obligatoire")
     private String fieldOfStudy;

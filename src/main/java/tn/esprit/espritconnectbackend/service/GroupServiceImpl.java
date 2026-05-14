@@ -14,6 +14,7 @@ import tn.esprit.espritconnectbackend.entities.GroupMemberCriteria;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.GroupMemberRole;
 import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
+import tn.esprit.espritconnectbackend.entities.enums.GroupStatus;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
 import tn.esprit.espritconnectbackend.repositories.GroupMemberRepository;
 import tn.esprit.espritconnectbackend.repositories.GroupRepository;
@@ -45,16 +46,18 @@ public class GroupServiceImpl implements GroupService {
     @Transactional
     public GroupDTO createGroup(GroupDTO groupDTO) {
         User creator = getCurrentUserEntity();
-        
+
         Group group = new Group();
         group.setGroupName(groupDTO.getGroupName());
         group.setDescription(groupDTO.getDescription());
         group.setPrivacy(groupDTO.getPrivacy());
+        group.setStatus(GroupStatus.PENDING);
         group.setCreator(creator);
         group.setWebsite(groupDTO.getWebsite());
         group.setLogoUrl(groupDTO.getLogoUrl());
         group.setBannerUrl(groupDTO.getBannerUrl());
         group.setTagging(groupDTO.getTagging() != null ? groupDTO.getTagging() : false);
+        log.info("Received labels for group {}: {}", groupDTO.getGroupName(), groupDTO.getLabels());
         group.setLabels(groupDTO.getLabels());
 
         GroupMemberCriteria criteria = new GroupMemberCriteria();
@@ -75,20 +78,22 @@ public class GroupServiceImpl implements GroupService {
         criteria.setMentoringOffering(groupDTO.getMentoringOffering());
         criteria.setMentoringSeeking(groupDTO.getMentoringSeeking());
         group.setMemberCriteria(criteria);
-        
+
         Group savedGroup = groupRepository.save(group);
-        
+
         // Add creator as ADMIN member
         addMemberToGroupEntity(savedGroup, creator, GroupMemberRole.ADMIN);
-        
-        auditService.logAction("CREATE_GROUP", "GROUP", savedGroup.getId(), "Groupe créé : " + savedGroup.getGroupName());
-        
+
+        auditService.logAction("CREATE_GROUP", "GROUP", savedGroup.getId(),
+                "Groupe créé : " + savedGroup.getGroupName());
+
         return mapToDTO(savedGroup);
     }
 
     @Override
     @Transactional
-    public GroupDTO createGroupWithFiles(GroupDTO groupDTO, MultipartFile logoFile, MultipartFile bannerFile) throws java.io.IOException {
+    public GroupDTO createGroupWithFiles(GroupDTO groupDTO, MultipartFile logoFile, MultipartFile bannerFile)
+            throws java.io.IOException {
         if (logoFile != null && !logoFile.isEmpty()) {
             String logoUrl = fileStorageService.saveFile(logoFile, "icons");
             groupDTO.setLogoUrl(logoUrl);
@@ -105,11 +110,11 @@ public class GroupServiceImpl implements GroupService {
     public GroupDTO updateGroup(UUID groupId, GroupDTO groupDTO) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         // Check if current user is admin of the group
         User currentUser = getCurrentUserEntity();
         checkGroupAdmin(group, currentUser);
-        
+
         group.setGroupName(groupDTO.getGroupName());
         group.setDescription(groupDTO.getDescription());
         group.setPrivacy(groupDTO.getPrivacy());
@@ -138,11 +143,26 @@ public class GroupServiceImpl implements GroupService {
         group.getMemberCriteria().setWillingSeeking(groupDTO.getWillingSeeking());
         group.getMemberCriteria().setMentoringOffering(groupDTO.getMentoringOffering());
         group.getMemberCriteria().setMentoringSeeking(groupDTO.getMentoringSeeking());
-        
+
         Group updatedGroup = groupRepository.save(group);
         auditService.logAction("UPDATE_GROUP", "GROUP", updatedGroup.getId(), "Groupe mis à jour");
-        
+
         return mapToDTO(updatedGroup);
+    }
+
+    @Override
+    @Transactional
+    public GroupDTO updateGroupWithFiles(UUID groupId, GroupDTO groupDTO, MultipartFile logoFile,
+            MultipartFile bannerFile) throws java.io.IOException {
+        if (logoFile != null && !logoFile.isEmpty()) {
+            String logoUrl = fileStorageService.saveFile(logoFile, "icons");
+            groupDTO.setLogoUrl(logoUrl);
+        }
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String bannerUrl = fileStorageService.saveFile(bannerFile, "banners");
+            groupDTO.setBannerUrl(bannerUrl);
+        }
+        return updateGroup(groupId, groupDTO);
     }
 
     @Override
@@ -150,10 +170,10 @@ public class GroupServiceImpl implements GroupService {
     public void deleteGroup(UUID groupId) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         User currentUser = getCurrentUserEntity();
         checkGroupAdmin(group, currentUser);
-        
+
         groupRepository.delete(group);
         auditService.logAction("DELETE_GROUP", "GROUP", groupId, "Groupe supprimé");
     }
@@ -168,8 +188,71 @@ public class GroupServiceImpl implements GroupService {
     @Override
     public List<GroupDTO> getAllGroups() {
         return groupRepository.findAll().stream()
+                .filter(group -> group.getStatus() == GroupStatus.APPROVED)
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<GroupDTO> getPendingGroups() {
+        return groupRepository.findAll().stream()
+                .filter(group -> group.getStatus() == GroupStatus.PENDING)
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public GroupDTO approveGroup(UUID groupId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+
+        if (group.getStatus() != GroupStatus.PENDING) {
+            throw new RuntimeException("Le groupe n'est pas en attente d'approbation");
+        }
+
+        group.setStatus(GroupStatus.APPROVED);
+        Group savedGroup = groupRepository.save(group);
+
+        // Notify creator
+        notificationService.createNotification(
+                group.getCreator(),
+                "Groupe approuvé",
+                "Votre groupe '" + group.getGroupName() + "' a été approuvé et est maintenant visible publiquement.",
+                NotificationType.GROUP_APPROVED,
+                "GROUP",
+                group.getId());
+
+        auditService.logAction("APPROVE_GROUP", "GROUP", groupId, "Groupe approuvé : " + group.getGroupName());
+
+        return mapToDTO(savedGroup);
+    }
+
+    @Override
+    @Transactional
+    public GroupDTO rejectGroup(UUID groupId) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+
+        if (group.getStatus() != GroupStatus.PENDING) {
+            throw new RuntimeException("Le groupe n'est pas en attente d'approbation");
+        }
+
+        group.setStatus(GroupStatus.REJECTED);
+        Group savedGroup = groupRepository.save(group);
+
+        // Notify creator
+        notificationService.createNotification(
+                group.getCreator(),
+                "Groupe rejeté",
+                "Votre groupe '" + group.getGroupName() + "' a été rejeté.",
+                NotificationType.GROUP_REJECTED,
+                "GROUP",
+                group.getId());
+
+        auditService.logAction("REJECT_GROUP", "GROUP", groupId, "Groupe rejeté : " + group.getGroupName());
+
+        return mapToDTO(savedGroup);
     }
 
     @Override
@@ -177,26 +260,25 @@ public class GroupServiceImpl implements GroupService {
     public GroupMemberDTO addMember(UUID groupId, UUID userId, GroupMemberRole role) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         User userToAdd = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-        
+
         if (groupMemberRepository.existsByGroupAndUser(group, userToAdd)) {
             throw new RuntimeException("L'utilisateur est déjà membre du groupe");
         }
-        
+
         GroupMember member = addMemberToGroupEntity(group, userToAdd, role);
-        
+
         // Notify user
         notificationService.createNotification(
-            userToAdd, 
-            "Nouveau groupe", 
-            "Vous avez été ajouté au groupe : " + group.getGroupName(), 
-            NotificationType.GROUP_INVITE, 
-            "GROUP",
-            group.getId()
-        );
-        
+                userToAdd,
+                "Nouveau groupe",
+                "Vous avez été ajouté au groupe : " + group.getGroupName(),
+                NotificationType.GROUP_INVITE,
+                "GROUP",
+                group.getId());
+
         return mapToMemberDTO(member);
     }
 
@@ -205,15 +287,15 @@ public class GroupServiceImpl implements GroupService {
     public void removeMember(UUID groupId, UUID userId) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         User userToRemove = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-        
+
         GroupMember member = groupMemberRepository.findByGroupAndUser(group, userToRemove)
                 .orElseThrow(() -> new RuntimeException("Membre non trouvé"));
-        
+
         groupMemberRepository.delete(member);
-        
+
         // Update member count
         group.setMembersCount(group.getMembersCount() - 1);
         groupRepository.save(group);
@@ -224,18 +306,18 @@ public class GroupServiceImpl implements GroupService {
     public void leaveGroup(UUID groupId) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         User currentUser = getCurrentUserEntity();
-        
+
         GroupMember member = groupMemberRepository.findByGroupAndUser(group, currentUser)
                 .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce groupe"));
-        
+
         groupMemberRepository.delete(member);
-        
+
         // Update member count
         group.setMembersCount(group.getMembersCount() - 1);
         groupRepository.save(group);
-        
+
         auditService.logAction("LEAVE_GROUP", "GROUP", groupId, "Utilisateur a quitté le groupe");
     }
 
@@ -244,29 +326,27 @@ public class GroupServiceImpl implements GroupService {
     public GroupMemberDTO joinGroup(UUID groupId) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         User currentUser = getCurrentUserEntity();
-        
+
         // Check if user is already a member
         if (groupMemberRepository.existsByGroupAndUser(group, currentUser)) {
             throw new RuntimeException("Vous êtes déjà membre de ce groupe");
         }
 
-        
         GroupMember member = addMemberToGroupEntity(group, currentUser, GroupMemberRole.MEMBER);
-        
+
         // Notify user
         notificationService.createNotification(
-            currentUser, 
-            "Groupe rejoint", 
-            "Vous avez rejoint le groupe : " + group.getGroupName(), 
-            NotificationType.GROUP_JOIN, 
-            "GROUP",
-            group.getId()
-        );
-        
+                currentUser,
+                "Groupe rejoint",
+                "Vous avez rejoint le groupe : " + group.getGroupName(),
+                NotificationType.GROUP_JOIN,
+                "GROUP",
+                group.getId());
+
         auditService.logAction("JOIN_GROUP", "GROUP", groupId, "Utilisateur a rejoint le groupe");
-        
+
         return mapToMemberDTO(member);
     }
 
@@ -274,7 +354,7 @@ public class GroupServiceImpl implements GroupService {
     public List<GroupMemberDTO> getGroupMembers(UUID groupId) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
-        
+
         return groupMemberRepository.findByGroup(group).stream()
                 .map(this::mapToMemberDTO)
                 .collect(Collectors.toList());
@@ -284,7 +364,7 @@ public class GroupServiceImpl implements GroupService {
     public List<GroupDTO> getUserGroups(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-        
+
         return groupMemberRepository.findByUser(user).stream()
                 .map(m -> mapToDTO(m.getGroup()))
                 .collect(Collectors.toList());
@@ -295,20 +375,20 @@ public class GroupServiceImpl implements GroupService {
         member.setGroup(group);
         member.setUser(user);
         member.setRole(role);
-        
+
         GroupMember savedMember = groupMemberRepository.save(member);
-        
+
         // Update member count
         group.setMembersCount(group.getMembersCount() + 1);
         groupRepository.save(group);
-        
+
         return savedMember;
     }
 
     private void checkGroupAdmin(Group group, User user) {
         GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
                 .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce groupe"));
-        
+
         if (member.getRole() != GroupMemberRole.ADMIN) {
             throw new RuntimeException("Action non autorisée : Vous n'êtes pas administrateur du groupe");
         }
@@ -320,6 +400,7 @@ public class GroupServiceImpl implements GroupService {
         dto.setGroupName(group.getGroupName());
         dto.setDescription(group.getDescription());
         dto.setPrivacy(group.getPrivacy());
+        dto.setStatus(group.getStatus());
         dto.setWebsite(group.getWebsite());
         dto.setLogoUrl(group.getLogoUrl());
         dto.setBannerUrl(group.getBannerUrl());

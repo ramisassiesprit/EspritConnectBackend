@@ -2,6 +2,7 @@ package tn.esprit.espritconnectbackend.dto;
 
 import lombok.Data;
 import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
+import tn.esprit.espritconnectbackend.entities.enums.GroupStatus;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -14,16 +15,17 @@ public class GroupDTO {
     private String logoUrl;
     private String bannerUrl;
     private GroupPrivacy privacy;
+    private GroupStatus status;
     private Boolean tagging;
     private String labels;
     private String location;
     private String affiliation;
     private String fieldOfStudy;
     private String degree;
-    private Integer graduationYear;
+    private String graduationYear;
     private String institutionProgram;
     private String otherDegree;
-    private Integer otherGraduationYear;
+    private String otherGraduationYear;
     private String company;
     private String industry;
     private String jobFunction;

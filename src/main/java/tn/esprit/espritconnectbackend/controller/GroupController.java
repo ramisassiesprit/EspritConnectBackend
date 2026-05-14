@@ -29,78 +29,20 @@ public class GroupController {
 
     @PostMapping(value = "/with-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<GroupDTO> createGroupWithFiles(
-            @RequestParam("groupName") String groupName,
-            @RequestParam("description") String description,
-            @RequestParam(value = "website", required = false) String website,
-            @RequestParam(value = "privacy", required = false) String privacy,
-            @RequestParam(value = "tagging", required = false) String tagging,
-            @RequestParam(value = "labels", required = false) String labels,
-            @RequestParam(value = "location", required = false) String location,
-            @RequestParam(value = "affiliation", required = false) String affiliation,
-            @RequestParam(value = "fieldOfStudy", required = false) String fieldOfStudy,
-            @RequestParam(value = "degree", required = false) String degree,
-            @RequestParam(value = "graduationYear", required = false) String graduationYear,
-            @RequestParam(value = "institutionProgram", required = false) String institutionProgram,
-            @RequestParam(value = "otherDegree", required = false) String otherDegree,
-            @RequestParam(value = "otherGraduationYear", required = false) String otherGraduationYear,
-            @RequestParam(value = "company", required = false) String company,
-            @RequestParam(value = "industry", required = false) String industry,
-            @RequestParam(value = "jobFunction", required = false) String jobFunction,
-            @RequestParam(value = "willingOffering", required = false) String willingOffering,
-            @RequestParam(value = "willingSeeking", required = false) String willingSeeking,
-            @RequestParam(value = "mentoringOffering", required = false) String mentoringOffering,
-            @RequestParam(value = "mentoringSeeking", required = false) String mentoringSeeking,
-            @RequestParam(value = "addMembers", required = false) String addMembers,
-            @RequestParam(value = "logoFile", required = false) MultipartFile logoFile,
-            @RequestParam(value = "bannerFile", required = false) MultipartFile bannerFile) throws IOException {
-
-        GroupDTO groupDTO = new GroupDTO();
-        groupDTO.setGroupName(groupName);
-        groupDTO.setDescription(description);
-        groupDTO.setWebsite(website);
-        try {
-            groupDTO.setPrivacy(tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy
-                    .valueOf(privacy != null && !privacy.isEmpty() ? privacy.toUpperCase() : "PUBLIC"));
-        } catch (IllegalArgumentException e) {
-            groupDTO.setPrivacy(tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy.PUBLIC);
-        }
-        groupDTO.setTagging(Boolean.valueOf(tagging));
-        groupDTO.setLabels(labels);
-        groupDTO.setLocation(location);
-        groupDTO.setAffiliation(affiliation);
-        groupDTO.setFieldOfStudy(fieldOfStudy);
-        groupDTO.setDegree(degree);
-        if (graduationYear != null && !graduationYear.isEmpty()) {
-            try {
-                groupDTO.setGraduationYear(Integer.valueOf(graduationYear));
-            } catch (NumberFormatException e) {
-                // Ignore or log error
-            }
-        }
-        groupDTO.setInstitutionProgram(institutionProgram);
-        groupDTO.setOtherDegree(otherDegree);
-        if (otherGraduationYear != null && !otherGraduationYear.isEmpty()) {
-            try {
-                groupDTO.setOtherGraduationYear(Integer.valueOf(otherGraduationYear));
-            } catch (NumberFormatException e) {
-                // Ignore or log error
-            }
-        }
-        groupDTO.setCompany(company);
-        groupDTO.setIndustry(industry);
-        groupDTO.setJobFunction(jobFunction);
-        groupDTO.setWillingOffering(willingOffering);
-        groupDTO.setWillingSeeking(willingSeeking);
-        groupDTO.setMentoringOffering(mentoringOffering);
-        groupDTO.setMentoringSeeking(mentoringSeeking);
-        groupDTO.setAddMembers(addMembers);
+            @RequestPart("group") GroupDTO groupDTO,
+            @RequestPart(value = "logoFile", required = false) MultipartFile logoFile,
+            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) throws IOException {
 
         return ResponseEntity.ok(groupService.createGroupWithFiles(groupDTO, logoFile, bannerFile));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<GroupDTO> updateGroup(@PathVariable UUID id, @RequestBody GroupDTO groupDTO) {
-        return ResponseEntity.ok(groupService.updateGroup(id, groupDTO));
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<GroupDTO> updateGroup(
+            @PathVariable UUID id,
+            @RequestPart("group") GroupDTO groupDTO,
+            @RequestPart(value = "logoFile", required = false) MultipartFile logoFile,
+            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) throws IOException {
+        return ResponseEntity.ok(groupService.updateGroupWithFiles(id, groupDTO, logoFile, bannerFile));
     }
 
     @DeleteMapping("/{id}")
@@ -117,6 +59,24 @@ public class GroupController {
     @GetMapping
     public ResponseEntity<List<GroupDTO>> getAllGroups() {
         return ResponseEntity.ok(groupService.getAllGroups());
+    }
+
+    @GetMapping("/pending")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<GroupDTO>> getPendingGroups() {
+        return ResponseEntity.ok(groupService.getPendingGroups());
+    }
+
+    @PostMapping("/{id}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<GroupDTO> approveGroup(@PathVariable UUID id) {
+        return ResponseEntity.ok(groupService.approveGroup(id));
+    }
+
+    @PostMapping("/{id}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<GroupDTO> rejectGroup(@PathVariable UUID id) {
+        return ResponseEntity.ok(groupService.rejectGroup(id));
     }
 
     @PostMapping("/{id}/members")

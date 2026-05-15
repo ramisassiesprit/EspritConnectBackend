@@ -33,6 +33,7 @@ import java.util.UUID;
 public class ResourceServiceImpl implements ResourceService {
     private static final DateTimeFormatter LABEL_DATE_FORMAT = DateTimeFormatter.ofPattern("d MMMM, yyyy", Locale.ENGLISH);
     private static final Path RESOURCES_DIR = Paths.get("uploads/resources").toAbsolutePath().normalize();
+    private static final Path RESOURCES_COVERS_DIR = Paths.get("uploads/resourceCovers").toAbsolutePath().normalize();
 
     private final ResourceFolderRepository resourceFolderRepository;
     private final ResourceFileRepository resourceFileRepository;
@@ -85,6 +86,35 @@ public class ResourceServiceImpl implements ResourceService {
         folder.setName(request.getName().trim());
         folder.setCoverImageUrl(request.getCoverImageUrl());
         return toFolderSummaryDto(resourceFolderRepository.save(folder));
+    }
+
+    @Override
+    @Transactional
+    public ResourceFolderDTO uploadFolderCover(UUID folderId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("L'image de couverture est obligatoire");
+        }
+
+        ResourceFolder folder = resourceFolderRepository.findById(folderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable avec l'id: " + folderId));
+
+        try {
+            Files.createDirectories(RESOURCES_COVERS_DIR);
+            String safeOriginalName = sanitizeFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "cover-image");
+            String storedName = UUID.randomUUID() + "_" + safeOriginalName;
+            Path target = RESOURCES_COVERS_DIR.resolve(storedName).normalize();
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+
+            if (folder.getCoverImageUrl() != null && folder.getCoverImageUrl().contains("/resourceCovers/")) {
+                String oldName = folder.getCoverImageUrl().substring(folder.getCoverImageUrl().lastIndexOf('/') + 1);
+                Files.deleteIfExists(RESOURCES_COVERS_DIR.resolve(oldName).normalize());
+            }
+
+            folder.setCoverImageUrl("/EspritConnect/resourceCovers/" + storedName);
+            return toFolderSummaryDto(resourceFolderRepository.save(folder));
+        } catch (IOException ex) {
+            throw new RuntimeException("Erreur lors de l'upload de l'image de couverture", ex);
+        }
     }
 
     @Override

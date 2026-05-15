@@ -5,6 +5,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tn.esprit.espritconnectbackend.dto.CreateResourceFolderRequest;
 import tn.esprit.espritconnectbackend.dto.ResourceFileDTO;
 import tn.esprit.espritconnectbackend.dto.ResourceFolderDTO;
@@ -56,7 +57,7 @@ public class ResourceServiceImpl implements ResourceService {
         ResourceFolderDetailsDTO dto = new ResourceFolderDetailsDTO();
         dto.setId(folder.getId());
         dto.setName(folder.getName());
-        dto.setCoverImageUrl(folder.getCoverImageUrl());
+        dto.setCoverImageUrl(toPublicAssetUrl(folder.getCoverImageUrl()));
         dto.setCreatorName(folder.getCreator().getFirstName() + " " + folder.getCreator().getLastName());
         dto.setCreatorAvatarUrl(folder.getCreator().getAvatarUrl());
         dto.setCreatedAtLabel(LABEL_DATE_FORMAT.format(folder.getCreatedAt()));
@@ -84,7 +85,9 @@ public class ResourceServiceImpl implements ResourceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable avec l'id: " + folderId));
 
         folder.setName(request.getName().trim());
-        folder.setCoverImageUrl(request.getCoverImageUrl());
+        if (request.getCoverImageUrl() != null) {
+            folder.setCoverImageUrl(request.getCoverImageUrl());
+        }
         return toFolderSummaryDto(resourceFolderRepository.save(folder));
     }
 
@@ -173,7 +176,7 @@ public class ResourceServiceImpl implements ResourceService {
         ResourceFolderDTO dto = new ResourceFolderDTO();
         dto.setId(folder.getId());
         dto.setName(folder.getName());
-        dto.setCoverImageUrl(folder.getCoverImageUrl());
+        dto.setCoverImageUrl(toPublicAssetUrl(folder.getCoverImageUrl()));
         dto.setCreatorName(folder.getCreator().getFirstName() + " " + folder.getCreator().getLastName());
         dto.setCreatorAvatarUrl(folder.getCreator().getAvatarUrl());
         dto.setCreatedAt(folder.getCreatedAt());
@@ -201,6 +204,22 @@ public class ResourceServiceImpl implements ResourceService {
 
     private String sanitizeFileName(String fileName) {
         return fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    private String toPublicAssetUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            return value;
+        }
+        if (value.startsWith("/EspritConnect/")) {
+            String pathWithoutContext = value.substring("/EspritConnect".length());
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(pathWithoutContext)
+                    .toUriString();
+        }
+        return value;
     }
 
     private void deletePhysicalFile(String path) {

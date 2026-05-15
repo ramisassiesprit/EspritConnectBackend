@@ -5,6 +5,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tn.esprit.espritconnectbackend.dto.JobOfferDTO;
 import tn.esprit.espritconnectbackend.entities.JobOffer;
 import tn.esprit.espritconnectbackend.entities.User;
@@ -133,7 +134,9 @@ public class JobOfferServiceImpl implements JobOfferService {
         entity.setDeadline(dto.getDeadline());
         entity.setApplyUrl(dto.getApplyUrl());
         entity.setAttachmentUrl(dto.getAttachmentUrl());
-        entity.setImageUrl(dto.getImageUrl());
+        if (dto.getImageUrl() != null) {
+            entity.setImageUrl(dto.getImageUrl());
+        }
         entity.setStatus(dto.getStatus());
     }
 
@@ -153,7 +156,7 @@ public class JobOfferServiceImpl implements JobOfferService {
         dto.setDeadline(entity.getDeadline());
         dto.setApplyUrl(entity.getApplyUrl());
         dto.setAttachmentUrl(entity.getAttachmentUrl());
-        dto.setImageUrl(entity.getImageUrl());
+        dto.setImageUrl(toPublicAssetUrl(entity.getImageUrl()));
         dto.setStatus(entity.getStatus());
         if (entity.getPublisher() != null) {
             String firstName = entity.getPublisher().getFirstName() == null ? "" : entity.getPublisher().getFirstName().trim();
@@ -166,6 +169,22 @@ public class JobOfferServiceImpl implements JobOfferService {
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
+    }
+
+    private String toPublicAssetUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            return value;
+        }
+        if (value.startsWith("/EspritConnect/")) {
+            String pathWithoutContext = value.substring("/EspritConnect".length());
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(pathWithoutContext)
+                    .toUriString();
+        }
+        return value;
     }
 
     private String sanitizeFileName(String fileName) {

@@ -61,8 +61,8 @@ public class JobOfferDTO {
 
     @Size(max = 1000, message = "Le lien de l'image est trop long")
     @Pattern(
-            regexp = "^(https?://.*)?$",
-            message = "Le lien de l'image doit commencer par http:// ou https://"
+            regexp = "^(https?://.*|/EspritConnect/.*)?$",
+            message = "Le lien de l'image doit commencer par http://, https:// ou /EspritConnect/"
     )
     private String imageUrl;
 

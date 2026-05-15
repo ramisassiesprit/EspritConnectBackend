@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
+import tn.esprit.espritconnectbackend.entities.enums.GroupStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,6 +48,11 @@ public class Group {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private GroupPrivacy privacy = GroupPrivacy.PUBLIC;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private GroupStatus status = GroupStatus.PENDING;
 
     @Column(nullable = false)
     @Builder.Default

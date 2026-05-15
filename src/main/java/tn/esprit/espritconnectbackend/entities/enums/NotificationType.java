@@ -13,6 +13,8 @@ public enum NotificationType {
     MESSAGE_RECEIVED,
     GROUP_INVITE,
     GROUP_JOIN,
+    GROUP_APPROVED,
+    GROUP_REJECTED,
     NEWSLETTER,
     SYSTEM
 }

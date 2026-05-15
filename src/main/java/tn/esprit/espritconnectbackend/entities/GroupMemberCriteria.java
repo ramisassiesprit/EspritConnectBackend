@@ -37,8 +37,8 @@ public class GroupMemberCriteria {
     @Column(length = 100)
     private String degree;
 
-    @Column(name = "graduation_year")
-    private Integer graduationYear;
+    @Column(name = "graduation_year", length = 100)
+    private String graduationYear;
 
     @Column(name = "institution_program", length = 200)
     private String institutionProgram;
@@ -46,8 +46,8 @@ public class GroupMemberCriteria {
     @Column(name = "other_degree", length = 100)
     private String otherDegree;
 
-    @Column(name = "other_graduation_year")
-    private Integer otherGraduationYear;
+    @Column(name = "other_graduation_year", length = 100)
+    private String otherGraduationYear;
 
     @Column(length = 200)
     private String company;

@@ -1,5 +1,6 @@
 package tn.esprit.espritconnectbackend.service;
 
+import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.espritconnectbackend.dto.JobOfferDTO;
 
 import java.util.List;
@@ -11,5 +12,6 @@ public interface JobOfferService {
     JobOfferDTO getById(UUID id);
     List<JobOfferDTO> getAll();
     List<JobOfferDTO> getMine();
+    JobOfferDTO uploadImage(UUID id, MultipartFile file);
     void delete(UUID id);
 }

@@ -5,8 +5,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.espritconnectbackend.dto.JobOfferDTO;
 import tn.esprit.espritconnectbackend.service.JobOfferService;
 
@@ -55,5 +57,14 @@ public class JobOfferController {
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         jobOfferService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Uploader une image pour une offre")
+    public ResponseEntity<JobOfferDTO> uploadImage(
+            @PathVariable UUID id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(jobOfferService.uploadImage(id, file));
     }
 }

@@ -15,9 +15,14 @@ public class GeminiApiServiceController {
         this.geminiApiService = geminiApiService;
     }
 
+    public static class ChatRequest {
+        public String prompt;
+        public String context;
+    }
+
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chat(@RequestBody String prompt) {
+    public SseEmitter chat(@RequestBody ChatRequest request) {
         // Return a Server-Sent Events Emitter to stream chunks in real-time
-        return geminiApiService.streamChatCompletion(prompt);
+        return geminiApiService.streamChatCompletion(request.prompt, request.context);
     }
 }

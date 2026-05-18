@@ -184,26 +184,33 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void forgotPassword(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé"));
+                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé avec l'adresse email : " + email));
 
-        // Dans un cas réel, on génèrerait un token spécifique stocké en base (PasswordResetToken)
-        // Ici, on va utiliser le JwtService pour générer un token court de 15 minutes
-        String resetToken = jwtService.generateAccessToken(user); // Hack rapide pour avoir un token avec expiration
+        // Générer un token sécurisé et définir sa date d'expiration (15 minutes)
+        String resetToken = java.util.UUID.randomUUID().toString();
+        user.setResetPasswordToken(resetToken);
+        user.setResetPasswordTokenExpiry(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
         
         emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
     }
 
     @Override
     public void resetPassword(ResetPasswordRequest request) {
-        String email = jwtService.extractUsername(request.getToken());
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé"));
+        User user = userRepository.findByResetPasswordToken(request.getToken())
+                .orElseThrow(() -> new IllegalArgumentException("Token de réinitialisation invalide"));
 
-        if (!jwtService.isTokenValid(request.getToken(), user)) {
-            throw new IllegalArgumentException("Token de réinitialisation invalide ou expiré");
+        if (user.getResetPasswordTokenExpiry() == null || user.getResetPasswordTokenExpiry().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Le token de réinitialisation a expiré");
         }
 
+        // Hacher le nouveau mot de passe et sauvegarder
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        
+        // Invalider le token pour qu'il ne puisse pas être réutilisé
+        user.setResetPasswordToken(null);
+        user.setResetPasswordTokenExpiry(null);
+        
         userRepository.save(user);
     }
 

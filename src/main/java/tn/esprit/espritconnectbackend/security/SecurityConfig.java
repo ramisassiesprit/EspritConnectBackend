@@ -28,6 +28,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AuthenticationProvider authenticationProvider;
+    private final tn.esprit.espritconnectbackend.security.oauth2.OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -37,6 +38,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                         "/auth/**",
+                        "/login/oauth2/**",
                         "/api/ai/**",
                         "/v2/api-docs",
                         "/v3/api-docs",
@@ -56,6 +58,9 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers("/profile/**").authenticated()
                 .anyRequest().authenticated()
+            )
+            .oauth2Login(oauth2 -> oauth2
+                .successHandler(oauth2AuthenticationSuccessHandler)
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authenticationProvider(authenticationProvider)

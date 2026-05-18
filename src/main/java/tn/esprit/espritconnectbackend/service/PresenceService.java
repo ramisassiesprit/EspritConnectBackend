@@ -23,18 +23,22 @@ public class PresenceService {
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
-        String userIdStr = (String) headerAccessor.getSessionAttributes().get("userId");
-        if (userIdStr != null) {
-            updateUserStatus(UUID.fromString(userIdStr), true);
+        if (headerAccessor.getSessionAttributes() != null) {
+            String userIdStr = (String) headerAccessor.getSessionAttributes().get("userId");
+            if (userIdStr != null) {
+                updateUserStatus(UUID.fromString(userIdStr), true);
+            }
         }
     }
 
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
-        String userIdStr = (String) headerAccessor.getSessionAttributes().get("userId");
-        if (userIdStr != null) {
-            updateUserStatus(UUID.fromString(userIdStr), false);
+        if (headerAccessor.getSessionAttributes() != null) {
+            String userIdStr = (String) headerAccessor.getSessionAttributes().get("userId");
+            if (userIdStr != null) {
+                updateUserStatus(UUID.fromString(userIdStr), false);
+            }
         }
     }
 

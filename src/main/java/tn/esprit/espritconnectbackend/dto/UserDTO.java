@@ -32,7 +32,6 @@ public class UserDTO {
     private String avatarUrl;
     private String bannerUrl;
     private String bio;
-    @NotBlank(message = "Le code est obligatoire")
     @Size(max = 100)
     private String code;
 

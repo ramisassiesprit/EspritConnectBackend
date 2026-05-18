@@ -88,6 +88,16 @@ public class ResourceController {
         return ResponseEntity.ok(resourceService.updateFolder(folderId, request));
     }
 
+    @PostMapping(value = "/folders/{folderId}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Uploader l'image de couverture d'un dossier (Admin)")
+    public ResponseEntity<ResourceFolderDTO> uploadFolderCover(
+            @PathVariable UUID folderId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(resourceService.uploadFolderCover(folderId, file));
+    }
+
     @PostMapping(value = "/folders/{folderId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Uploader un fichier dans un dossier (Admin)")

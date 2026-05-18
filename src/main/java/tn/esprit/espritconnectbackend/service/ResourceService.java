@@ -14,6 +14,7 @@ public interface ResourceService {
     ResourceFolderDetailsDTO getFolderDetails(UUID folderId);
     ResourceFolderDTO createFolder(CreateResourceFolderRequest request);
     ResourceFolderDTO updateFolder(UUID folderId, CreateResourceFolderRequest request);
+    ResourceFolderDTO uploadFolderCover(UUID folderId, MultipartFile file);
     ResourceFileDTO uploadFile(UUID folderId, MultipartFile file);
     void deleteFolder(UUID folderId);
     void deleteFile(UUID fileId);

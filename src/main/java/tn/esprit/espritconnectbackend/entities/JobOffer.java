@@ -45,6 +45,12 @@ public class JobOffer {
     @Column(length = 255)
     private String location;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "contract_type")
     private ContractType contractType;
@@ -54,6 +60,15 @@ public class JobOffer {
 
     @Column(name = "deadline")
     private LocalDate deadline;
+
+    @Column(name = "apply_url", length = 1000)
+    private String applyUrl;
+
+    @Column(name = "attachment_url", length = 1000)
+    private String attachmentUrl;
+
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

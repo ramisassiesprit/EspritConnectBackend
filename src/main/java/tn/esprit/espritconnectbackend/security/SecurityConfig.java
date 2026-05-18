@@ -54,7 +54,9 @@ public class SecurityConfig {
                         "/users",
                         "/users/**",
                         "/ws-chat/**",
-                        "/groupsImages/**"
+                        "/groupsImages/**",
+                        "/jobImages/**",
+                        "/resourceCovers/**"
                 ).permitAll()
                 .requestMatchers("/profile/**").authenticated()
                 .anyRequest().authenticated()

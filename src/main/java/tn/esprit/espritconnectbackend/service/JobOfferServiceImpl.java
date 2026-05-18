@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tn.esprit.espritconnectbackend.dto.JobOfferDTO;
 import tn.esprit.espritconnectbackend.entities.JobOffer;
 import tn.esprit.espritconnectbackend.entities.User;
@@ -13,12 +15,18 @@ import tn.esprit.espritconnectbackend.exception.ResourceNotFoundException;
 import tn.esprit.espritconnectbackend.repositories.JobOfferRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class JobOfferServiceImpl implements JobOfferService {
+    private static final Path JOBS_IMAGES_DIR = Paths.get("uploads/jobsImages").toAbsolutePath().normalize();
     private final JobOfferRepository jobOfferRepository;
     private final UserRepository userRepository;
 
@@ -57,6 +65,35 @@ public class JobOfferServiceImpl implements JobOfferService {
         return jobOfferRepository.findByPublisherId(currentUser.getId()).stream().map(this::toDto).toList();
     }
 
+    @Transactional
+    public JobOfferDTO uploadImage(UUID id, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Image file is required");
+        }
+
+        JobOffer jobOffer = findOrThrow(id);
+        ensureOwnerOrAdmin(jobOffer.getPublisher().getId());
+
+        try {
+            Files.createDirectories(JOBS_IMAGES_DIR);
+            String original = file.getOriginalFilename() == null ? "job-image" : file.getOriginalFilename();
+            String safeName = sanitizeFileName(original);
+            String storedName = UUID.randomUUID() + "_" + safeName;
+            Path target = JOBS_IMAGES_DIR.resolve(storedName).normalize();
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+
+            if (jobOffer.getImageUrl() != null && jobOffer.getImageUrl().contains("/jobImages/")) {
+                String oldName = jobOffer.getImageUrl().substring(jobOffer.getImageUrl().lastIndexOf('/') + 1);
+                Files.deleteIfExists(JOBS_IMAGES_DIR.resolve(oldName).normalize());
+            }
+
+            jobOffer.setImageUrl("/EspritConnect/jobImages/" + storedName);
+            return toDto(jobOfferRepository.save(jobOffer));
+        } catch (IOException ex) {
+            throw new RuntimeException("Erreur lors de l'upload de l'image", ex);
+        }
+    }
+
     @Override
     @Transactional
     public void delete(UUID id) {
@@ -90,9 +127,16 @@ public class JobOfferServiceImpl implements JobOfferService {
         entity.setCompany(dto.getCompany());
         entity.setIndustry(dto.getIndustry());
         entity.setLocation(dto.getLocation());
+        entity.setLatitude(dto.getLatitude());
+        entity.setLongitude(dto.getLongitude());
         entity.setContractType(dto.getContractType());
         entity.setExperienceLevel(dto.getExperienceLevel());
         entity.setDeadline(dto.getDeadline());
+        entity.setApplyUrl(dto.getApplyUrl());
+        entity.setAttachmentUrl(dto.getAttachmentUrl());
+        if (dto.getImageUrl() != null) {
+            entity.setImageUrl(dto.getImageUrl());
+        }
         entity.setStatus(dto.getStatus());
     }
 
@@ -105,12 +149,45 @@ public class JobOfferServiceImpl implements JobOfferService {
         dto.setCompany(entity.getCompany());
         dto.setIndustry(entity.getIndustry());
         dto.setLocation(entity.getLocation());
+        dto.setLatitude(entity.getLatitude());
+        dto.setLongitude(entity.getLongitude());
         dto.setContractType(entity.getContractType());
         dto.setExperienceLevel(entity.getExperienceLevel());
         dto.setDeadline(entity.getDeadline());
+        dto.setApplyUrl(entity.getApplyUrl());
+        dto.setAttachmentUrl(entity.getAttachmentUrl());
+        dto.setImageUrl(toPublicAssetUrl(entity.getImageUrl()));
         dto.setStatus(entity.getStatus());
+        if (entity.getPublisher() != null) {
+            String firstName = entity.getPublisher().getFirstName() == null ? "" : entity.getPublisher().getFirstName().trim();
+            String lastName = entity.getPublisher().getLastName() == null ? "" : entity.getPublisher().getLastName().trim();
+            dto.setPublisherName((firstName + " " + lastName).trim());
+            dto.setPublisherAvatarUrl(entity.getPublisher().getAvatarUrl());
+            dto.setPublisherJobTitle(entity.getPublisher().getJobTitle());
+            dto.setPublisherCompanyName(entity.getPublisher().getCompanyName());
+        }
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
+    }
+
+    private String toPublicAssetUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            return value;
+        }
+        if (value.startsWith("/EspritConnect/")) {
+            String pathWithoutContext = value.substring("/EspritConnect".length());
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(pathWithoutContext)
+                    .toUriString();
+        }
+        return value;
+    }
+
+    private String sanitizeFileName(String fileName) {
+        return fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
     }
 }

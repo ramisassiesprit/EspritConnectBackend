@@ -17,5 +17,9 @@ public class PostDTO {
     private Integer commentsCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    // Optional: Group reference, Reactions, Comments
+    private UUID groupId;
+    private java.util.List<String> images;
+    private java.util.List<PostFileDTO> files;
+    private Boolean liked;
 }
+

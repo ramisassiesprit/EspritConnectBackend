@@ -61,19 +61,19 @@ public class AuthServiceImpl implements AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(request.getRole());
         user.setAvatarUrl(request.getAvatarUrl());
-        
+
         user.setStatus(initialStatus);
 
         userRepository.save(user);
-        log.info("Nouvel utilisateur enregistré : {} ({}) avec le statut {}", user.getEmail(), user.getRole(), initialStatus);
+        log.info("Nouvel utilisateur enregistré : {} ({}) avec le statut {}", user.getEmail(), user.getRole(),
+                initialStatus);
 
-        // Si le compte n'est pas actif, on ne retourne pas de token
-        if (initialStatus != UserStatus.ACTIVE) {
+        if (initialStatus != UserStatus.PENDING) {
             return new AuthenticationResponse();
         }
 
         String accessToken = jwtService.generateAccessToken(user);
-        
+
         AuthenticationResponse authResponse = new AuthenticationResponse();
         authResponse.setAccessToken(accessToken);
         authResponse.setUserId(user.getId());
@@ -83,20 +83,22 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public AuthenticationResponse login(AuthenticationRequest request, HttpServletRequest servletRequest, HttpServletResponse response) {
+    public AuthenticationResponse login(AuthenticationRequest request, HttpServletRequest servletRequest,
+            HttpServletResponse response) {
         log.info("Tentative de connexion pour l'utilisateur : {}", request.getEmail());
         try {
             authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-            );
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
         } catch (AuthenticationException e) {
             log.error("Échec d'authentification pour {}: {}", request.getEmail(), e.getMessage());
-            throw new org.springframework.security.authentication.BadCredentialsException("Email ou mot de passe incorrect");
+            throw new org.springframework.security.authentication.BadCredentialsException(
+                    "Email ou mot de passe incorrect");
         }
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> {
-                    log.error("Utilisateur non trouvé après authentification réussie (étrange) : {}", request.getEmail());
+                    log.error("Utilisateur non trouvé après authentification réussie (étrange) : {}",
+                            request.getEmail());
                     return new UsernameNotFoundException("Utilisateur non trouvé");
                 });
 
@@ -115,7 +117,7 @@ public class AuthServiceImpl implements AuthService {
         setRefreshTokenCookie(response, refreshToken, (int) (refreshExpiration / 1000));
 
         log.info("Connexion réussie pour l'utilisateur : {}", user.getEmail());
-        
+
         AuthenticationResponse authResponse = new AuthenticationResponse();
         authResponse.setAccessToken(accessToken);
         authResponse.setRefreshToken(refreshToken);
@@ -140,7 +142,7 @@ public class AuthServiceImpl implements AuthService {
 
             if (jwtService.isTokenValid(refreshToken, user)) {
                 String accessToken = jwtService.generateAccessToken(user);
-                
+
                 // Optionnel : Rotation du refresh token
                 String newRefreshToken = jwtService.generateRefreshToken(user);
                 setRefreshTokenCookie(response, newRefreshToken, (int) (refreshExpiration / 1000));
@@ -162,7 +164,7 @@ public class AuthServiceImpl implements AuthService {
         // Supprimer le cookie
         Cookie cookie = new Cookie("refresh_token", null);
         cookie.setHttpOnly(true);
-        cookie.setSecure(true);
+        cookie.setSecure(false);
         cookie.setPath("/");
         cookie.setMaxAge(0);
         response.addCookie(cookie);
@@ -186,10 +188,11 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé"));
 
-        // Dans un cas réel, on génèrerait un token spécifique stocké en base (PasswordResetToken)
+        // Dans un cas réel, on génèrerait un token spécifique stocké en base
+        // (PasswordResetToken)
         // Ici, on va utiliser le JwtService pour générer un token court de 15 minutes
         String resetToken = jwtService.generateAccessToken(user); // Hack rapide pour avoir un token avec expiration
-        
+
         emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
     }
 
@@ -210,7 +213,7 @@ public class AuthServiceImpl implements AuthService {
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken, int maxAge) {
         Cookie cookie = new Cookie("refresh_token", refreshToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(true);
+        cookie.setSecure(false);
         cookie.setPath("/");
         cookie.setMaxAge(maxAge);
         response.addCookie(cookie);

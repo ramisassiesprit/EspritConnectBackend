@@ -16,9 +16,11 @@ import tn.esprit.espritconnectbackend.entities.enums.GroupMemberRole;
 import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
 import tn.esprit.espritconnectbackend.entities.enums.GroupStatus;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
+import tn.esprit.espritconnectbackend.repositories.GroupMemberCriteriaRepository;
 import tn.esprit.espritconnectbackend.repositories.GroupMemberRepository;
 import tn.esprit.espritconnectbackend.repositories.GroupRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.List;
 import java.util.UUID;
@@ -31,10 +33,12 @@ public class GroupServiceImpl implements GroupService {
 
     private final GroupRepository groupRepository;
     private final GroupMemberRepository groupMemberRepository;
+    private final GroupMemberCriteriaRepository groupMemberCriteriaRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final FileStorageService fileStorageService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -119,32 +123,50 @@ public class GroupServiceImpl implements GroupService {
         group.setDescription(groupDTO.getDescription());
         group.setPrivacy(groupDTO.getPrivacy());
         group.setWebsite(groupDTO.getWebsite());
-        group.setLogoUrl(groupDTO.getLogoUrl());
-        group.setBannerUrl(groupDTO.getBannerUrl());
+        if (groupDTO.getLogoUrl() != null && !groupDTO.getLogoUrl().trim().isEmpty()) {
+            group.setLogoUrl(groupDTO.getLogoUrl());
+        }
+        if (groupDTO.getBannerUrl() != null && !groupDTO.getBannerUrl().trim().isEmpty()) {
+            group.setBannerUrl(groupDTO.getBannerUrl());
+        }
         group.setTagging(groupDTO.getTagging() != null ? groupDTO.getTagging() : group.getTagging());
         group.setLabels(groupDTO.getLabels());
+        group.setUpdatedAt(java.time.LocalDateTime.now());
 
-        if (group.getMemberCriteria() == null) {
-            group.setMemberCriteria(new GroupMemberCriteria());
-            group.getMemberCriteria().setGroup(group);
-        }
-        group.getMemberCriteria().setLocation(groupDTO.getLocation());
-        group.getMemberCriteria().setAffiliation(groupDTO.getAffiliation());
-        group.getMemberCriteria().setFieldOfStudy(groupDTO.getFieldOfStudy());
-        group.getMemberCriteria().setDegree(groupDTO.getDegree());
-        group.getMemberCriteria().setGraduationYear(groupDTO.getGraduationYear());
-        group.getMemberCriteria().setInstitutionProgram(groupDTO.getInstitutionProgram());
-        group.getMemberCriteria().setOtherDegree(groupDTO.getOtherDegree());
-        group.getMemberCriteria().setOtherGraduationYear(groupDTO.getOtherGraduationYear());
-        group.getMemberCriteria().setCompany(groupDTO.getCompany());
-        group.getMemberCriteria().setIndustry(groupDTO.getIndustry());
-        group.getMemberCriteria().setJobFunction(groupDTO.getJobFunction());
-        group.getMemberCriteria().setWillingOffering(groupDTO.getWillingOffering());
-        group.getMemberCriteria().setWillingSeeking(groupDTO.getWillingSeeking());
-        group.getMemberCriteria().setMentoringOffering(groupDTO.getMentoringOffering());
-        group.getMemberCriteria().setMentoringSeeking(groupDTO.getMentoringSeeking());
+        // Save the group first so it has a managed ID before criteria is persisted
+        Group savedGroup = groupRepository.save(group);
 
-        Group updatedGroup = groupRepository.save(group);
+        // Resolve or create the member criteria using the repository to avoid
+        // relying on cascade from the inverse side of the OneToOne relationship
+        GroupMemberCriteria criteria = groupMemberCriteriaRepository.findByGroup(savedGroup)
+                .orElseGet(() -> {
+                    GroupMemberCriteria newCriteria = new GroupMemberCriteria();
+                    newCriteria.setGroup(savedGroup);
+                    return newCriteria;
+                });
+
+        criteria.setLocation(groupDTO.getLocation());
+        criteria.setAffiliation(groupDTO.getAffiliation());
+        criteria.setFieldOfStudy(groupDTO.getFieldOfStudy());
+        criteria.setDegree(groupDTO.getDegree());
+        criteria.setGraduationYear(groupDTO.getGraduationYear());
+        criteria.setInstitutionProgram(groupDTO.getInstitutionProgram());
+        criteria.setOtherDegree(groupDTO.getOtherDegree());
+        criteria.setOtherGraduationYear(groupDTO.getOtherGraduationYear());
+        criteria.setCompany(groupDTO.getCompany());
+        criteria.setIndustry(groupDTO.getIndustry());
+        criteria.setJobFunction(groupDTO.getJobFunction());
+        criteria.setWillingOffering(groupDTO.getWillingOffering());
+        criteria.setWillingSeeking(groupDTO.getWillingSeeking());
+        criteria.setMentoringOffering(groupDTO.getMentoringOffering());
+        criteria.setMentoringSeeking(groupDTO.getMentoringSeeking());
+
+        groupMemberCriteriaRepository.save(criteria);
+
+        // Refresh to pick up the persisted criteria in the returned DTO
+        Group updatedGroup = groupRepository.findById(savedGroup.getId())
+                .orElse(savedGroup);
+
         auditService.logAction("UPDATE_GROUP", "GROUP", updatedGroup.getId(), "Groupe mis à jour");
 
         return mapToDTO(updatedGroup);
@@ -257,6 +279,38 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional
+    public GroupDTO setGroupStatus(UUID groupId, GroupStatus status) {
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+
+        group.setStatus(status);
+        Group saved = groupRepository.save(group);
+
+        // Notify creator for important transitions
+        if (status == GroupStatus.APPROVED) {
+            notificationService.createNotification(
+                    group.getCreator(),
+                    "Groupe approuvé",
+                    "Votre groupe '" + group.getGroupName() + "' a été approuvé.",
+                    NotificationType.GROUP_APPROVED,
+                    "GROUP",
+                    group.getId());
+        } else if (status == GroupStatus.REJECTED) {
+            notificationService.createNotification(
+                    group.getCreator(),
+                    "Groupe rejeté",
+                    "Votre groupe '" + group.getGroupName() + "' a été rejeté.",
+                    NotificationType.GROUP_REJECTED,
+                    "GROUP",
+                    group.getId());
+        }
+
+        auditService.logAction("SET_GROUP_STATUS", "GROUP", groupId, "Statut changé en: " + status.name());
+        return mapToDTO(saved);
+    }
+
+    @Override
+    @Transactional
     public GroupMemberDTO addMember(UUID groupId, UUID userId, GroupMemberRole role) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
@@ -279,7 +333,9 @@ public class GroupServiceImpl implements GroupService {
                 "GROUP",
                 group.getId());
 
-        return mapToMemberDTO(member);
+        GroupMemberDTO memberDTO = mapToMemberDTO(member);
+        broadcastGroupMembers(groupId);
+        return memberDTO;
     }
 
     @Override
@@ -299,6 +355,7 @@ public class GroupServiceImpl implements GroupService {
         // Update member count
         group.setMembersCount(group.getMembersCount() - 1);
         groupRepository.save(group);
+        broadcastGroupMembers(groupId);
     }
 
     @Override
@@ -319,6 +376,7 @@ public class GroupServiceImpl implements GroupService {
         groupRepository.save(group);
 
         auditService.logAction("LEAVE_GROUP", "GROUP", groupId, "Utilisateur a quitté le groupe");
+        broadcastGroupMembers(groupId);
     }
 
     @Override
@@ -347,7 +405,9 @@ public class GroupServiceImpl implements GroupService {
 
         auditService.logAction("JOIN_GROUP", "GROUP", groupId, "Utilisateur a rejoint le groupe");
 
-        return mapToMemberDTO(member);
+        GroupMemberDTO memberDTO = mapToMemberDTO(member);
+        broadcastGroupMembers(groupId);
+        return memberDTO;
     }
 
     @Override
@@ -431,6 +491,16 @@ public class GroupServiceImpl implements GroupService {
         return dto;
     }
 
+    private void broadcastGroupMembers(UUID groupId) {
+        try {
+            List<GroupMemberDTO> members = getGroupMembers(groupId);
+            messagingTemplate.convertAndSend("/topic/group/" + groupId + "/members", members);
+            log.info("Broadcasted updated group members to WebSocket for group: {}", groupId);
+        } catch (Exception e) {
+            log.error("Error broadcasting group members for group " + groupId, e);
+        }
+    }
+
     private GroupMemberDTO mapToMemberDTO(GroupMember member) {
         GroupMemberDTO dto = new GroupMemberDTO();
         dto.setId(member.getId());
@@ -440,6 +510,17 @@ public class GroupServiceImpl implements GroupService {
         dto.setRole(member.getRole());
         dto.setIsManual(member.getIsManual());
         dto.setJoinedAt(member.getJoinedAt());
+        
+        // Populate additional user profile details
+        if (member.getUser() != null) {
+            dto.setFirstName(member.getUser().getFirstName());
+            dto.setLastName(member.getUser().getLastName());
+            dto.setAvatarUrl(member.getUser().getAvatarUrl());
+            dto.setIsOnline(member.getUser().getIsOnline());
+            if (member.getUser().getRole() != null) {
+                dto.setUserRole(member.getUser().getRole().name());
+            }
+        }
         return dto;
     }
 }

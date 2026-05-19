@@ -1,11 +1,14 @@
 package tn.esprit.espritconnectbackend.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.espritconnectbackend.dto.PostDTO;
 import tn.esprit.espritconnectbackend.service.PostService;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,6 +28,17 @@ public class PostController {
         return ResponseEntity.ok(postService.createPost(content, mediaUrl, postType));
     }
 
+    // Create a new post with files
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PostDTO> createPostWithFiles(
+            @RequestParam("content") String content,
+            @RequestParam(value = "groupId", required = false) UUID groupId,
+            @RequestParam(value = "postType", required = false) String postType,
+            @RequestParam(value = "mediaUrl", required = false) String mediaUrl,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws IOException {
+        return ResponseEntity.ok(postService.createPostWithFiles(content, groupId, postType, mediaUrl, files));
+    }
+
     // Get all posts (feed)
     @GetMapping
     public ResponseEntity<List<PostDTO>> getAllPosts() {
@@ -41,6 +55,12 @@ public class PostController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<PostDTO>> getPostsByUser(@PathVariable UUID userId) {
         return ResponseEntity.ok(postService.getPostsByUser(userId));
+    }
+
+    // Get posts by a specific group
+    @GetMapping("/group/{groupId}")
+    public ResponseEntity<List<PostDTO>> getPostsByGroup(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(postService.getPostsByGroup(groupId));
     }
 
     // Update a post

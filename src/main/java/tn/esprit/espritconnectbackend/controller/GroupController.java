@@ -45,6 +45,31 @@ public class GroupController {
         return ResponseEntity.ok(groupService.updateGroupWithFiles(id, groupDTO, logoFile, bannerFile));
     }
 
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<GroupDTO> updateGroupJson(
+            @PathVariable UUID id,
+            @RequestBody GroupDTO groupDTO) {
+        return ResponseEntity.ok(groupService.updateGroup(id, groupDTO));
+    }
+ 
+    @PostMapping(value = "/{id}/with-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<GroupDTO> updateGroupWithFilesPost(
+            @PathVariable UUID id,
+            @RequestPart("group") GroupDTO groupDTO,
+            @RequestPart(value = "logoFile", required = false) MultipartFile logoFile,
+            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) throws IOException {
+        try {
+            System.out.println("Received multipart update for group id=" + id + ", groupName=" + groupDTO.getGroupName()
+                    + ", logoFile=" + (logoFile != null ? logoFile.getOriginalFilename() : "null")
+                    + ", bannerFile=" + (bannerFile != null ? bannerFile.getOriginalFilename() : "null"));
+            GroupDTO result = groupService.updateGroupWithFiles(id, groupDTO, logoFile, bannerFile);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteGroup(@PathVariable UUID id) {
         groupService.deleteGroup(id);
@@ -77,6 +102,12 @@ public class GroupController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<GroupDTO> rejectGroup(@PathVariable UUID id) {
         return ResponseEntity.ok(groupService.rejectGroup(id));
+    }
+
+    @PostMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<GroupDTO> setStatus(@PathVariable UUID id, @RequestParam tn.esprit.espritconnectbackend.entities.enums.GroupStatus status) {
+        return ResponseEntity.ok(groupService.setGroupStatus(id, status));
     }
 
     @PostMapping("/{id}/members")

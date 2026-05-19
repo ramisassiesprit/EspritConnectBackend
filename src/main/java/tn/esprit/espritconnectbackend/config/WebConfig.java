@@ -15,6 +15,7 @@ public class WebConfig implements WebMvcConfigurer {
         exposeDirectory("uploads/groupsImages", "/groupsImages/**", registry);
         exposeDirectory("uploads/jobsImages", "/jobImages/**", registry);
         exposeDirectory("uploads/resourceCovers", "/resourceCovers/**", registry);
+        exposeDirectory("uploads", "/uploads/**", registry);
     }
 
     private void exposeDirectory(String dirName, String handler, ResourceHandlerRegistry registry) {

@@ -17,6 +17,7 @@ public class EventDTO {
     private String coverUrl;
     private Integer capacity;
     private Integer registeredCount;
+    private String tags;
     private EventType eventType;
     private EventStatus status;
     private UUID creatorId;

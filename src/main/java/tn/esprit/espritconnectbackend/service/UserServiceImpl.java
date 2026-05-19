@@ -8,6 +8,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.espritconnectbackend.dto.BadgeDTO;
 import tn.esprit.espritconnectbackend.dto.UserDTO;
+import tn.esprit.espritconnectbackend.dto.EspritProfileDTO;
+import tn.esprit.espritconnectbackend.dto.WillingToHelpDTO;
+import tn.esprit.espritconnectbackend.dto.WorkExperienceDTO;
+import tn.esprit.espritconnectbackend.dto.OtherEducationDTO;
+import tn.esprit.espritconnectbackend.dto.SkillDTO;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.UserRole;
 import tn.esprit.espritconnectbackend.entities.enums.UserStatus;
@@ -103,6 +108,7 @@ public class UserServiceImpl implements UserService {
         String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByIsOnlineTrue().stream()
                 .filter(user -> !user.getEmail().equals(currentEmail))
+                .filter(user -> user.getRole().equals(UserRole.ETUDIANT)||user.getRole().equals(UserRole.ALUMNI)||user.getRole().equals(UserRole.ENSEIGNANT))
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
@@ -154,6 +160,68 @@ public class UserServiceImpl implements UserService {
                     .type(ub.getBadge().getType())
                     .earnedAt(ub.getEarnedAt())
                     .build())
+                .collect(java.util.stream.Collectors.toList()));
+        }
+        if (user.getEspritProfile() != null) {
+            EspritProfileDTO epDto = new EspritProfileDTO();
+            epDto.setId(user.getEspritProfile().getId());
+            epDto.setFieldOfStudy(user.getEspritProfile().getFieldOfStudy());
+            epDto.setDegree(user.getEspritProfile().getDegree());
+            epDto.setGraduationYear(user.getEspritProfile().getGraduationYear());
+            epDto.setProgram(user.getEspritProfile().getProgram());
+            epDto.setInstitution(user.getEspritProfile().getInstitution());
+            dto.setEspritProfile(epDto);
+        }
+        if (user.getWillingToHelps() != null) {
+            dto.setWillingToHelps(user.getWillingToHelps().stream()
+                .map(w -> {
+                    WillingToHelpDTO wDto = new WillingToHelpDTO();
+                    wDto.setId(w.getId());
+                    wDto.setOfferHelp(w.getOfferHelp());
+                    wDto.setSeekHelp(w.getSeekHelp());
+                    wDto.setOfferMentor(w.getOfferMentor());
+                    wDto.setSeekMentor(w.getSeekMentor());
+                    return wDto;
+                })
+                .collect(java.util.stream.Collectors.toList()));
+        }
+        if (user.getWorkExperiences() != null) {
+            dto.setWorkExperiences(user.getWorkExperiences().stream()
+                .map(w -> {
+                    WorkExperienceDTO wDto = new WorkExperienceDTO();
+                    wDto.setId(w.getId());
+                    wDto.setCompany(w.getCompany());
+                    wDto.setJobTitle(w.getJobTitle());
+                    wDto.setIndustry(w.getIndustry());
+                    wDto.setJobFunction(w.getJobFunction());
+                    wDto.setStartDate(w.getStartDate());
+                    wDto.setEndDate(w.getEndDate());
+                    wDto.setIsCurrent(w.getIsCurrent());
+                    wDto.setDescription(w.getDescription());
+                    return wDto;
+                })
+                .collect(java.util.stream.Collectors.toList()));
+        }
+        if (user.getOtherEducations() != null) {
+            dto.setOtherEducations(user.getOtherEducations().stream()
+                .map(oe -> {
+                    OtherEducationDTO oeDto = new OtherEducationDTO();
+                    oeDto.setId(oe.getId());
+                    oeDto.setInstitutionName(oe.getInstitutionName());
+                    oeDto.setDegree(oe.getDegree());
+                    oeDto.setGraduationYear(oe.getGraduationYear());
+                    return oeDto;
+                })
+                .collect(java.util.stream.Collectors.toList()));
+        }
+        if (user.getSkills() != null) {
+            dto.setSkills(user.getSkills().stream()
+                .map(s -> {
+                    SkillDTO sDto = new SkillDTO();
+                    sDto.setId(s.getId());
+                    sDto.setName(s.getName());
+                    return sDto;
+                })
                 .collect(java.util.stream.Collectors.toList()));
         }
         return dto;

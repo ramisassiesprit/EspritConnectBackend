@@ -56,4 +56,9 @@ public class UserDTO {
     private LocalDateTime updatedAt;
     private Boolean isOnline;
     private java.util.List<BadgeDTO> badges;
+    private EspritProfileDTO espritProfile;
+    private java.util.List<WillingToHelpDTO> willingToHelps;
+    private java.util.List<WorkExperienceDTO> workExperiences;
+    private java.util.List<OtherEducationDTO> otherEducations;
+    private java.util.List<SkillDTO> skills;
 }

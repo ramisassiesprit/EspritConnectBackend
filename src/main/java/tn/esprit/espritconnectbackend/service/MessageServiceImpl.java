@@ -30,7 +30,13 @@ public class MessageServiceImpl implements MessageService {
     @Override
     @Transactional
     public MessageDTO sendMessage(MessageDTO messageDTO) {
-        User sender = getCurrentUserEntity();
+        User sender;
+        if (messageDTO.getSenderId() != null) {
+            sender = userRepository.findById(messageDTO.getSenderId())
+                    .orElseThrow(() -> new RuntimeException("Sender not found"));
+        } else {
+            sender = getCurrentUserEntity();
+        }
         User receiver = userRepository.findById(messageDTO.getReceiverId()).orElseThrow();
 
         Message message = Message.builder()

@@ -13,4 +13,5 @@ public interface EventRegistrationRepository extends JpaRepository<EventRegistra
     List<EventRegistration> findByUser(User user);
     Optional<EventRegistration> findByEventAndUser(Event event, User user);
     boolean existsByEventAndUser(Event event, User user);
+    List<EventRegistration> findByEventAndStatusOrderByRegisteredAtAsc(Event event, tn.esprit.espritconnectbackend.entities.enums.RegistrationStatus status);
 }

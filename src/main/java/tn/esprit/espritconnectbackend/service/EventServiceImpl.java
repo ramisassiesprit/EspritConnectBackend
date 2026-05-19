@@ -13,10 +13,17 @@ import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.EventStatus;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
 import tn.esprit.espritconnectbackend.entities.enums.RegistrationStatus;
+import tn.esprit.espritconnectbackend.entities.enums.UserRole;
+import tn.esprit.espritconnectbackend.entities.Badge;
+import tn.esprit.espritconnectbackend.entities.UserBadge;
+import tn.esprit.espritconnectbackend.repositories.BadgeRepository;
+import tn.esprit.espritconnectbackend.repositories.UserBadgeRepository;
 import tn.esprit.espritconnectbackend.repositories.EventRegistrationRepository;
 import tn.esprit.espritconnectbackend.repositories.EventRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
+import tn.esprit.espritconnectbackend.service.Auth.EmailService;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,11 +38,51 @@ public class EventServiceImpl implements EventService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final EmailService emailService;
+    private final BadgeRepository badgeRepository;
+    private final UserBadgeRepository userBadgeRepository;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+    }
+
+    private void notifyAllUsersOfEvent(Event event) {
+        List<User> allUsers = userRepository.findAll();
+        for (User user : allUsers) {
+            try {
+                notificationService.createNotification(
+                    user,
+                    "Nouvel événement !",
+                    "L'événement \"" + event.getTitle() + "\" a été publié. N'hésitez pas à y participer !",
+                    NotificationType.EVENT_REMINDER, 
+                    "EVENT",
+                    event.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to create in-app notification for user: " + user.getEmail(), e);
+            }
+            
+            try {
+                new Thread(() -> {
+                    try {
+                        emailService.sendEventNotificationEmail(
+                            user.getEmail(),
+                            event.getTitle(),
+                            event.getDescription(),
+                            event.getStartAt() != null ? event.getStartAt().toString() : "",
+                            event.getLocation(),
+                            event.getCreator() != null ? (event.getCreator().getFirstName() + " " + event.getCreator().getLastName()) : "Esprit Connect"
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send email to user: " + user.getEmail(), e);
+                    }
+                }).start();
+            } catch (Exception e) {
+                log.error("Failed to start email thread for user: " + user.getEmail(), e);
+            }
+        }
     }
 
     @Override
@@ -51,12 +98,22 @@ public class EventServiceImpl implements EventService {
         event.setLocation(eventDTO.getLocation());
         event.setCoverUrl(eventDTO.getCoverUrl());
         event.setCapacity(eventDTO.getCapacity());
+        event.setTags(eventDTO.getTags());
         event.setEventType(eventDTO.getEventType());
-        event.setStatus(EventStatus.UPCOMING);
         event.setCreator(creator);
+        
+        if (creator.getRole() == UserRole.ADMIN) {
+            event.setStatus(EventStatus.UPCOMING);
+        } else {
+            event.setStatus(EventStatus.PENDING);
+        }
         
         Event savedEvent = eventRepository.save(event);
         auditService.logAction("CREATE_EVENT", "EVENT", savedEvent.getId(), "Événement créé : " + savedEvent.getTitle());
+        
+        if (savedEvent.getStatus() == EventStatus.UPCOMING) {
+            notifyAllUsersOfEvent(savedEvent);
+        }
         
         return mapToDTO(savedEvent);
     }
@@ -68,8 +125,8 @@ public class EventServiceImpl implements EventService {
                 .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
         
         User currentUser = getCurrentUserEntity();
-        if (!event.getCreator().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Seul le créateur peut modifier l'événement");
+        if (!event.getCreator().getId().equals(currentUser.getId()) && currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul le créateur ou un administrateur peut modifier l'événement");
         }
         
         event.setTitle(eventDTO.getTitle());
@@ -79,6 +136,7 @@ public class EventServiceImpl implements EventService {
         event.setLocation(eventDTO.getLocation());
         event.setCoverUrl(eventDTO.getCoverUrl());
         event.setCapacity(eventDTO.getCapacity());
+        event.setTags(eventDTO.getTags());
         event.setEventType(eventDTO.getEventType());
         event.setStatus(eventDTO.getStatus());
         
@@ -95,8 +153,8 @@ public class EventServiceImpl implements EventService {
                 .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
         
         User currentUser = getCurrentUserEntity();
-        if (!event.getCreator().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Seul le créateur peut supprimer l'événement");
+        if (!event.getCreator().getId().equals(currentUser.getId()) && currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul le créateur ou un administrateur peut supprimer l'événement");
         }
         
         eventRepository.delete(event);
@@ -112,9 +170,68 @@ public class EventServiceImpl implements EventService {
 
     @Override
     public List<EventDTO> getAllEvents() {
-        return eventRepository.findAll().stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+        User currentUser = getCurrentUserEntity();
+        if (currentUser.getRole() == UserRole.ADMIN) {
+            return eventRepository.findAll().stream()
+                    .map(this::mapToDTO)
+                    .collect(Collectors.toList());
+        } else {
+            return eventRepository.findAll().stream()
+                    .filter(event -> event.getStatus() == EventStatus.UPCOMING 
+                            || event.getStatus() == EventStatus.PUBLISHED 
+                            || event.getStatus() == EventStatus.COMPLETED
+                            || event.getCreator().getId().equals(currentUser.getId()))
+                    .map(this::mapToDTO)
+                    .collect(Collectors.toList());
+        }
+    }
+
+    @Override
+    @Transactional
+    public EventDTO approveEvent(UUID eventId) {
+        User currentUser = getCurrentUserEntity();
+        if (currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul l'administrateur peut approuver un événement");
+        }
+        
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        if (event.getStatus() != EventStatus.PENDING) {
+            throw new RuntimeException("L'événement n'est pas en attente d'approbation");
+        }
+        
+        event.setStatus(EventStatus.UPCOMING);
+        Event savedEvent = eventRepository.save(event);
+        
+        auditService.logAction("APPROVE_EVENT", "EVENT", eventId, "Événement approuvé par l'admin");
+        
+        notifyAllUsersOfEvent(savedEvent);
+        
+        return mapToDTO(savedEvent);
+    }
+
+    @Override
+    @Transactional
+    public EventDTO rejectEvent(UUID eventId) {
+        User currentUser = getCurrentUserEntity();
+        if (currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul l'administrateur peut rejeter un événement");
+        }
+        
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        if (event.getStatus() != EventStatus.PENDING) {
+            throw new RuntimeException("L'événement n'est pas en attente d'approbation");
+        }
+        
+        event.setStatus(EventStatus.CANCELLED);
+        Event savedEvent = eventRepository.save(event);
+        
+        auditService.logAction("REJECT_EVENT", "EVENT", eventId, "Événement rejeté par l'admin");
+        
+        return mapToDTO(savedEvent);
     }
 
     @Override
@@ -130,7 +247,28 @@ public class EventServiceImpl implements EventService {
         }
         
         if (event.getCapacity() != null && event.getRegisteredCount() >= event.getCapacity()) {
-            throw new RuntimeException("L'événement est complet");
+            if (Boolean.TRUE.equals(event.getWaitlistEnabled())) {
+                EventRegistration registration = new EventRegistration();
+                registration.setEvent(event);
+                registration.setUser(user);
+                registration.setStatus(RegistrationStatus.WAITLISTED);
+                
+                EventRegistration savedRegistration = registrationRepository.save(registration);
+                
+                // Notify user of waitlist
+                notificationService.createNotification(
+                    user,
+                    "Inscrit sur liste d'attente",
+                    "L'événement \"" + event.getTitle() + "\" est complet. Vous avez été ajouté à la liste d'attente.",
+                    NotificationType.EVENT_REMINDER, 
+                    "EVENT",
+                    event.getId()
+                );
+                
+                return mapToRegistrationDTO(savedRegistration);
+            } else {
+                throw new RuntimeException("L'événement est complet");
+            }
         }
         
         EventRegistration registration = new EventRegistration();
@@ -168,11 +306,58 @@ public class EventServiceImpl implements EventService {
         EventRegistration registration = registrationRepository.findByEventAndUser(event, user)
                 .orElseThrow(() -> new RuntimeException("Inscription non trouvée"));
         
+        RegistrationStatus oldStatus = registration.getStatus();
         registrationRepository.delete(registration);
         
-        // Update count
-        event.setRegisteredCount(event.getRegisteredCount() - 1);
-        eventRepository.save(event);
+        if (oldStatus == RegistrationStatus.REGISTERED) {
+            // Update count
+            event.setRegisteredCount(event.getRegisteredCount() - 1);
+            eventRepository.save(event);
+            
+            // Check waitlist auto-promotion
+            if (Boolean.TRUE.equals(event.getWaitlistEnabled())) {
+                List<EventRegistration> waitlist = registrationRepository.findByEventAndStatusOrderByRegisteredAtAsc(event, RegistrationStatus.WAITLISTED);
+                if (!waitlist.isEmpty()) {
+                    EventRegistration promotedRegistration = waitlist.get(0);
+                    promotedRegistration.setStatus(RegistrationStatus.REGISTERED);
+                    registrationRepository.save(promotedRegistration);
+                    
+                    // Increment count back
+                    event.setRegisteredCount(event.getRegisteredCount() + 1);
+                    eventRepository.save(event);
+                    
+                    // Notify promoted user in-app
+                    notificationService.createNotification(
+                        promotedRegistration.getUser(),
+                        "🎉 Inscription validée !",
+                        "Bonne nouvelle ! Une place s'est libérée et vous avez été inscrit d'office à l'événement : " + event.getTitle(),
+                        NotificationType.EVENT_REMINDER, 
+                        "EVENT",
+                        event.getId()
+                    );
+                    
+                    // Send notification email in background thread
+                    try {
+                        new Thread(() -> {
+                            try {
+                                emailService.sendEventNotificationEmail(
+                                    promotedRegistration.getUser().getEmail(),
+                                    "Inscription validée : " + event.getTitle(),
+                                    "Une place s'est libérée ! Vous êtes inscrit(e) d'office.",
+                                    event.getStartAt() != null ? event.getStartAt().toString() : "",
+                                    event.getLocation(),
+                                    event.getCreator() != null ? (event.getCreator().getFirstName() + " " + event.getCreator().getLastName()) : "Esprit Connect"
+                                );
+                            } catch (Exception e) {
+                                log.error("Failed to send email to user: " + promotedRegistration.getUser().getEmail(), e);
+                            }
+                        }).start();
+                    } catch (Exception e) {
+                        log.error("Failed to start email thread", e);
+                    }
+                }
+            }
+        }
     }
 
     @Override
@@ -195,6 +380,200 @@ public class EventServiceImpl implements EventService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<EventDTO> getRecommendedEvents() {
+        User currentUser = getCurrentUserEntity();
+        List<Event> upcomingEvents = eventRepository.findAll().stream()
+                .filter(e -> e.getStatus() == EventStatus.UPCOMING || e.getStatus() == EventStatus.PUBLISHED)
+                .toList();
+        
+        return upcomingEvents.stream()
+                .map(event -> {
+                    int score = 0;
+                    
+                    if (currentUser.getEspritProfile() != null && currentUser.getEspritProfile().getFieldOfStudy() != null) {
+                        String field = currentUser.getEspritProfile().getFieldOfStudy().toLowerCase();
+                        if (event.getTitle().toLowerCase().contains(field) 
+                                || (event.getDescription() != null && event.getDescription().toLowerCase().contains(field))
+                                || (event.getTags() != null && event.getTags().toLowerCase().contains(field))) {
+                            score += 3;
+                        }
+                    }
+                    
+                    if (currentUser.getSkills() != null && !currentUser.getSkills().isEmpty()) {
+                        for (var skill : currentUser.getSkills()) {
+                            String skillName = skill.getName().toLowerCase();
+                            if (event.getTitle().toLowerCase().contains(skillName)
+                                    || (event.getDescription() != null && event.getDescription().toLowerCase().contains(skillName))
+                                     || (event.getTags() != null && event.getTags().toLowerCase().contains(skillName))) {
+                                score += 2;
+                            }
+                        }
+                    }
+                    
+                    final int finalScore = score;
+                    return new Object() {
+                        final Event evt = event;
+                        final int scr = finalScore;
+                    };
+                })
+                .sorted((o1, o2) -> Integer.compare(o2.scr, o1.scr))
+                .map(o -> mapToDTO(o.evt))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public EventRegistrationDTO checkInUser(UUID eventId, UUID userId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        User currentUser = getCurrentUserEntity();
+        if (!event.getCreator().getId().equals(currentUser.getId()) && currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul l'organisateur ou un admin peut effectuer le check-in");
+        }
+        
+        User attendee = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        
+        EventRegistration registration = registrationRepository.findByEventAndUser(event, attendee)
+                .orElseThrow(() -> new RuntimeException("L'étudiant n'est pas inscrit à cet événement"));
+        
+        registration.setStatus(RegistrationStatus.ATTENDED);
+        registration.setCheckedInAt(LocalDateTime.now());
+        
+        EventRegistration saved = registrationRepository.save(registration);
+        auditService.logAction("CHECK_IN_EVENT", "EVENT", eventId, "Présence validée pour : " + attendee.getEmail());
+        
+        return mapToRegistrationDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public EventRegistrationDTO checkInUserByRegistrationId(UUID registrationId) {
+        EventRegistration registration = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new RuntimeException("Inscription non trouvée"));
+        
+        Event event = registration.getEvent();
+        User currentUser = getCurrentUserEntity();
+        if (!event.getCreator().getId().equals(currentUser.getId()) && currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul l'organisateur ou un admin peut effectuer le check-in");
+        }
+        
+        registration.setStatus(RegistrationStatus.ATTENDED);
+        registration.setCheckedInAt(LocalDateTime.now());
+        
+        EventRegistration saved = registrationRepository.save(registration);
+        auditService.logAction("CHECK_IN_EVENT_QR", "EVENT", event.getId(), "Présence validée par QR pour : " + registration.getUser().getEmail());
+        
+        return mapToRegistrationDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public EventRegistrationDTO submitFeedback(UUID eventId, Integer rating, String comment) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        User currentUser = getCurrentUserEntity();
+        EventRegistration registration = registrationRepository.findByEventAndUser(event, currentUser)
+                .orElseThrow(() -> new RuntimeException("Vous n'êtes pas inscrit à cet événement"));
+        
+        if (registration.getStatus() != RegistrationStatus.ATTENDED && registration.getStatus() != RegistrationStatus.REGISTERED) {
+            throw new RuntimeException("Vous devez avoir participé ou être inscrit pour donner votre avis");
+        }
+        
+        registration.setFeedbackRating(rating);
+        registration.setFeedbackComment(comment);
+        
+        EventRegistration saved = registrationRepository.save(registration);
+        auditService.logAction("SUBMIT_FEEDBACK_EVENT", "EVENT", eventId, "Feedback soumis par : " + currentUser.getEmail());
+        
+        return mapToRegistrationDTO(saved);
+    }
+
+    @Override
+    public List<EventRegistrationDTO> getEventFeedbacks(UUID eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        return registrationRepository.findByEvent(event).stream()
+                .filter(r -> r.getFeedbackRating() != null)
+                .map(this::mapToRegistrationDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public EventRegistrationDTO declareWinner(UUID eventId, UUID userId, Integer rank) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        User currentUser = getCurrentUserEntity();
+        if (!event.getCreator().getId().equals(currentUser.getId()) && currentUser.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Seul l'organisateur ou un admin peut désigner les vainqueurs");
+        }
+        
+        User winner = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Vainqueur non trouvé"));
+        
+        EventRegistration registration = registrationRepository.findByEventAndUser(event, winner)
+                .orElseThrow(() -> new RuntimeException("Ce vainqueur n'est pas inscrit à cet événement"));
+        
+        registration.setIsWinner(true);
+        registration.setWinnerRank(rank);
+        EventRegistration saved = registrationRepository.save(registration);
+        
+        try {
+            String badgeName = "Champion : " + event.getTitle();
+            String badgeDesc = "A remporté l'événement ou défi : " + event.getTitle() + " (Rang: " + (rank != null ? rank : "Gagnant") + ")";
+            
+            Badge badge = badgeRepository.findByName(badgeName).orElseGet(() -> {
+                Badge newBadge = new Badge();
+                newBadge.setName(badgeName);
+                newBadge.setDescription(badgeDesc);
+                newBadge.setType("EVENT_WINNER");
+                newBadge.setIconUrl("assets/images/badges/champion.png");
+                return badgeRepository.save(newBadge);
+            });
+            
+            if (!userBadgeRepository.existsByUserAndBadge(winner, badge)) {
+                UserBadge userBadge = new UserBadge();
+                userBadge.setUser(winner);
+                userBadge.setBadge(badge);
+                userBadge.setEarnedAt(LocalDateTime.now());
+                userBadgeRepository.save(userBadge);
+                log.info("Badge de vainqueur '{}' attribué à {}", badgeName, winner.getEmail());
+                
+                notificationService.createNotification(
+                    winner,
+                    "🏆 Nouveau badge remporté !",
+                    "Félicitations ! Vous avez été déclaré vainqueur de l'événement \"" + event.getTitle() + "\" et avez reçu le badge \"" + badgeName + "\".",
+                    NotificationType.EVENT_REMINDER, 
+                    "EVENT",
+                    event.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.error("Erreur lors de l'attribution du badge vainqueur", e);
+        }
+        
+        auditService.logAction("DECLARE_WINNER_EVENT", "EVENT", eventId, "Vainqueur désigné : " + winner.getEmail() + " (Rang: " + rank + ")");
+        return mapToRegistrationDTO(saved);
+    }
+
+    @Override
+    public List<EventRegistrationDTO> getEventWinners(UUID eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Événement non trouvé"));
+        
+        return registrationRepository.findByEvent(event).stream()
+                .filter(EventRegistration::getIsWinner)
+                .map(this::mapToRegistrationDTO)
+                .collect(Collectors.toList());
+    }
+
     private EventDTO mapToDTO(Event event) {
         EventDTO dto = new EventDTO();
         dto.setId(event.getId());
@@ -206,6 +585,7 @@ public class EventServiceImpl implements EventService {
         dto.setCoverUrl(event.getCoverUrl());
         dto.setCapacity(event.getCapacity());
         dto.setRegisteredCount(event.getRegisteredCount());
+        dto.setTags(event.getTags());
         dto.setEventType(event.getEventType());
         dto.setStatus(event.getStatus());
         dto.setCreatorId(event.getCreator().getId());
@@ -222,6 +602,11 @@ public class EventServiceImpl implements EventService {
         dto.setUserFullName(registration.getUser().getFirstName() + " " + registration.getUser().getLastName());
         dto.setStatus(registration.getStatus());
         dto.setRegisteredAt(registration.getRegisteredAt());
+        dto.setIsWinner(registration.getIsWinner());
+        dto.setWinnerRank(registration.getWinnerRank());
+        dto.setFeedbackRating(registration.getFeedbackRating());
+        dto.setFeedbackComment(registration.getFeedbackComment());
+        dto.setCheckedInAt(registration.getCheckedInAt());
         return dto;
     }
 }

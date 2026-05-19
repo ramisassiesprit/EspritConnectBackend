@@ -70,6 +70,9 @@ public class Event {
     @Builder.Default
     private Integer registeredCount = 0;
 
+    @Column(length = 255)
+    private String tags;
+
     @Column(name = "created_at", updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

@@ -13,4 +13,9 @@ public class EventRegistrationDTO {
     private String userFullName;
     private RegistrationStatus status;
     private LocalDateTime registeredAt;
+    private Boolean isWinner;
+    private Integer winnerRank;
+    private Integer feedbackRating;
+    private String feedbackComment;
+    private LocalDateTime checkedInAt;
 }

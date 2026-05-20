@@ -197,7 +197,6 @@ public class AuthServiceImpl implements AuthService {
         // Dans un cas réel, on génèrerait un token spécifique stocké en base
         // (PasswordResetToken)
         // Ici, on va utiliser le JwtService pour générer un token court de 15 minutes
-        String resetToken = jwtService.generateAccessToken(user); // Hack rapide pour avoir un token avec expiration
 
         emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
     }

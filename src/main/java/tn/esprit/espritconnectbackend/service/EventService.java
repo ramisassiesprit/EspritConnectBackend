@@ -31,4 +31,6 @@ public interface EventService {
     List<EventRegistrationDTO> getEventFeedbacks(UUID eventId);
     EventRegistrationDTO declareWinner(UUID eventId, UUID userId, Integer rank);
     List<EventRegistrationDTO> getEventWinners(UUID eventId);
+    
+    tn.esprit.espritconnectbackend.dto.EventAdminStatsDTO getAdminEventStats();
 }

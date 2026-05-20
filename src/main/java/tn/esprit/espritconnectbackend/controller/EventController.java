@@ -2,7 +2,9 @@ package tn.esprit.espritconnectbackend.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.espritconnectbackend.dto.EventAdminStatsDTO;
 import tn.esprit.espritconnectbackend.dto.EventDTO;
 import tn.esprit.espritconnectbackend.dto.EventRegistrationDTO;
 import tn.esprit.espritconnectbackend.service.EventService;
@@ -113,5 +115,10 @@ public class EventController {
     @GetMapping("/{id}/winners")
     public ResponseEntity<List<EventRegistrationDTO>> getWinners(@PathVariable UUID id) {
         return ResponseEntity.ok(eventService.getEventWinners(id));
+    }
+    @GetMapping("/admin/stats")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<EventAdminStatsDTO> getAdminStats() {
+        return ResponseEntity.ok(eventService.getAdminEventStats());
     }
 }

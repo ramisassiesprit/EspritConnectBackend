@@ -5,15 +5,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.espritconnectbackend.dto.EventAdminStatsDTO;
 import tn.esprit.espritconnectbackend.dto.EventDTO;
 import tn.esprit.espritconnectbackend.dto.EventRegistrationDTO;
 import tn.esprit.espritconnectbackend.entities.Event;
 import tn.esprit.espritconnectbackend.entities.EventRegistration;
 import tn.esprit.espritconnectbackend.entities.User;
-import tn.esprit.espritconnectbackend.entities.enums.EventStatus;
-import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
-import tn.esprit.espritconnectbackend.entities.enums.RegistrationStatus;
-import tn.esprit.espritconnectbackend.entities.enums.UserRole;
+import tn.esprit.espritconnectbackend.entities.enums.*;
 import tn.esprit.espritconnectbackend.entities.Badge;
 import tn.esprit.espritconnectbackend.entities.UserBadge;
 import tn.esprit.espritconnectbackend.repositories.BadgeRepository;
@@ -24,8 +22,7 @@ import tn.esprit.espritconnectbackend.repositories.UserRepository;
 import tn.esprit.espritconnectbackend.service.Auth.EmailService;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -572,6 +569,84 @@ public class EventServiceImpl implements EventService {
                 .filter(EventRegistration::getIsWinner)
                 .map(this::mapToRegistrationDTO)
                 .collect(Collectors.toList());
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public EventAdminStatsDTO getAdminEventStats() {
+        log.info("Récupération des statistiques d'administration des événements");
+
+        EventAdminStatsDTO stats = new EventAdminStatsDTO();
+
+        // 1. Total d'événements
+        long totalEvents = eventRepository.count();
+        stats.setTotalEvents(totalEvents);
+
+        // 2. Total des participants
+        Long totalParticipants = registrationRepository.count();
+        stats.setTotalParticipants(totalParticipants != null ? totalParticipants : 0);
+
+        // 3. Utilisateurs éligibles (ETUDIANT + ALUMNI)
+        long totalEligibleUsers = userRepository.countByRoleIn(
+                List.of(UserRole.ETUDIANT, UserRole.ALUMNI)
+        );
+        stats.setTotalEligibleUsers(totalEligibleUsers);
+
+        // 4. Taux de participation
+        double participationRate = totalEligibleUsers > 0
+                ? (totalParticipants / (double) totalEligibleUsers) * 100
+                : 0;
+        stats.setParticipationRate(participationRate);
+
+        // 5. Taux de présence (checked-in / total registered)
+        long totalCheckedIn = registrationRepository.countByCheckedInAtIsNotNull();
+        double attendanceRate = totalParticipants > 0
+                ? (totalCheckedIn / (double) totalParticipants) * 100
+                : 0;
+        stats.setAttendanceRate(attendanceRate);
+
+        // 6. Score de satisfaction moyen
+        Double avgFeedback = registrationRepository.getAverageFeedbackScore();
+        stats.setAverageFeedbackScore(avgFeedback != null ? avgFeedback : 0.0);
+
+        // 7. Total des gagnants
+        long totalWinners = registrationRepository.countByIsWinnerTrue();
+        stats.setTotalWinners(totalWinners);
+
+        // 8. Top 3 événements populaires
+        List<EventDTO> topEvents = eventRepository.findTop3ByOrderByRegisteredCountDesc()
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+        stats.setTopPopularEvents(topEvents);
+
+        // 9. Événements par statut
+        Map<String, Long> eventsByStatus = new HashMap<>();
+        for (EventStatus status : EventStatus.values()) {
+            long count = eventRepository.countByStatus(status);
+            eventsByStatus.put(status.name(), count);
+        }
+        stats.setEventsByStatus(eventsByStatus);
+
+        // 10. Événements par type
+        Map<String, Long> eventsByType = new HashMap<>();
+        for (EventType type : EventType.values()) {
+            long count = eventRepository.countByEventType(type);
+            eventsByType.put(type.name(), count);
+        }
+        stats.setEventsByType(eventsByType);
+
+        // 11. Inscriptions par mois
+        Map<String, Long> registrationsByMonth = new LinkedHashMap<>();
+        List<Object[]> monthData = eventRepository.countRegistrationsByMonth();
+        for (Object[] row : monthData) {
+            String month = (String) row[0];
+            Long count = ((Number) row[1]).longValue();
+            registrationsByMonth.put(month, count);
+        }
+        stats.setRegistrationsByMonth(registrationsByMonth);
+
+        log.info("Statistiques d'événements générées avec succès");
+        return stats;
     }
 
     private EventDTO mapToDTO(Event event) {

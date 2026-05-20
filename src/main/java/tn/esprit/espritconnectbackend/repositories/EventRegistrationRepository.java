@@ -14,4 +14,10 @@ public interface EventRegistrationRepository extends JpaRepository<EventRegistra
     Optional<EventRegistration> findByEventAndUser(Event event, User user);
     boolean existsByEventAndUser(Event event, User user);
     List<EventRegistration> findByEventAndStatusOrderByRegisteredAtAsc(Event event, tn.esprit.espritconnectbackend.entities.enums.RegistrationStatus status);
+    
+    long countByIsWinnerTrue();
+    long countByCheckedInAtIsNotNull();
+    
+    @org.springframework.data.jpa.repository.Query("SELECT AVG(er.feedbackRating) FROM EventRegistration er WHERE er.feedbackRating IS NOT NULL")
+    Double getAverageFeedbackScore();
 }

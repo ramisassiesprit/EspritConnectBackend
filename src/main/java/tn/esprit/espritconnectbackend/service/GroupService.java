@@ -21,6 +21,7 @@ public interface GroupService {
     List<GroupDTO> getPendingGroups();
     GroupDTO approveGroup(UUID groupId);
     GroupDTO rejectGroup(UUID groupId);
+    GroupDTO setGroupStatus(UUID groupId, GroupStatus status);
     
     // Member management
     GroupMemberDTO addMember(UUID groupId, UUID userId, GroupMemberRole role);

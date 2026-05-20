@@ -14,4 +14,11 @@ public class GroupMemberDTO {
     private GroupMemberRole role;
     private Boolean isManual;
     private LocalDateTime joinedAt;
+    
+    // User profile details
+    private String firstName;
+    private String lastName;
+    private String avatarUrl;
+    private Boolean isOnline;
+    private String userRole;
 }

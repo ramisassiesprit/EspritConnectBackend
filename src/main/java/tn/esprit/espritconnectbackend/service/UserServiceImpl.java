@@ -59,6 +59,9 @@ public class UserServiceImpl implements UserService {
         user.setAvatarUrl(userDTO.getAvatarUrl());
         user.setBannerUrl(userDTO.getBannerUrl());
         user.setNumTel(userDTO.getNumTel());
+        if (userDTO.getRole() != null && userDTO.getRole() != UserRole.ADMIN) {
+            user.setRole(userDTO.getRole());
+        }
         
         User savedUser = userRepository.save(user);
         auditService.logAction("UPDATE_PROFILE", "USER", savedUser.getId(), "Profil mis à jour");

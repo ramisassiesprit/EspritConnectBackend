@@ -55,7 +55,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         }
 
         String finalEmail = email;
-        User user = userRepository.findByEmail(finalEmail).orElseGet(() -> {
+        java.util.Optional<User> existingUserOpt = userRepository.findByEmail(finalEmail);
+        boolean isNewUser = !existingUserOpt.isPresent();
+        User user = existingUserOpt.orElseGet(() -> {
             // Extract names
             String firstName = oAuth2User.getAttribute("given_name");
             if (firstName == null) {
@@ -122,6 +124,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
                 .queryParam("lastName", URLEncoder.encode(user.getLastName(), StandardCharsets.UTF_8))
                 .queryParam("email", user.getEmail())
                 .queryParam("avatarUrl", safeAvatarUrl)
+                .queryParam("isNew", isNewUser)
                 .build().toUriString();
 
         getRedirectStrategy().sendRedirect(request, response, targetUrl);

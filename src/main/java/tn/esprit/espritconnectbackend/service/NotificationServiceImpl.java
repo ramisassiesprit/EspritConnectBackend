@@ -23,6 +23,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -42,7 +43,19 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setTargetId(targetId);
         notification.setIsRead(false);
         
-        return mapToDTO(notificationRepository.save(notification));
+        NotificationDTO dto = mapToDTO(notificationRepository.save(notification));
+        
+        try {
+            messagingTemplate.convertAndSendToUser(
+                    user.getId().toString(),
+                    "/queue/notifications",
+                    dto
+            );
+        } catch (Exception e) {
+            log.error("Erreur lors de l'envoi de la notification WebSocket à l'utilisateur : {}", user.getId(), e);
+        }
+        
+        return dto;
     }
 
     @Override

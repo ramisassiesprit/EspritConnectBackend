@@ -26,6 +26,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MentorshipServiceImpl implements MentorshipService {
 
+    private static final List<MentoringStatus> ACTIVE_STATUSES = List.of(MentoringStatus.ACCEPTED);
+
     private final MentoringRequestRepository requestRepository;
     private final MentoringSessionRepository sessionRepository;
     private final UserRepository userRepository;
@@ -36,6 +38,57 @@ public class MentorshipServiceImpl implements MentorshipService {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+    }
+
+    private void ensureNoActiveMentoring(User mentor, User mentee, UUID excludedRequestId) {
+        boolean mentorBusy = excludedRequestId == null
+                ? requestRepository.existsByMentorAndStatus(mentor, MentoringStatus.ACCEPTED)
+                : requestRepository.existsByMentorAndStatusAndIdNot(mentor, MentoringStatus.ACCEPTED, excludedRequestId);
+
+        if (mentorBusy) {
+            throw new RuntimeException("Ce mentor a déjà un mentorat actif");
+        }
+
+        boolean menteeBusy = excludedRequestId == null
+                ? requestRepository.existsByMenteeAndStatus(mentee, MentoringStatus.ACCEPTED)
+                : requestRepository.existsByMenteeAndStatusAndIdNot(mentee, MentoringStatus.ACCEPTED, excludedRequestId);
+
+        if (menteeBusy) {
+            throw new RuntimeException("Cet utilisateur a déjà un mentorat actif");
+        }
+    }
+
+    private void notifyMentoringStatus(MentoringRequest request, MentoringStatus status) {
+        NotificationType notificationType = switch (status) {
+            case ACCEPTED -> NotificationType.MENTORING_ACCEPTED;
+            case REJECTED -> NotificationType.MENTORING_REJECTED;
+            default -> NotificationType.SYSTEM;
+        };
+
+        String title = switch (status) {
+            case ACCEPTED -> "Demande de mentorat acceptée";
+            case REJECTED -> "Demande de mentorat refusée";
+            case CANCELLED -> "Demande de mentorat annulée";
+            case COMPLETED -> "Mentorat terminé";
+            default -> "Mise à jour du mentorat";
+        };
+
+        String body = switch (status) {
+            case ACCEPTED -> request.getMentor().getFirstName() + " a accepté votre demande de mentorat.";
+            case REJECTED -> request.getMentor().getFirstName() + " a refusé votre demande de mentorat.";
+            case CANCELLED -> "La demande de mentorat a été annulée.";
+            case COMPLETED -> "Le mentorat a été marqué comme terminé.";
+            default -> "Le statut de votre demande de mentorat a été mis à jour.";
+        };
+
+        notificationService.createNotification(
+                request.getMentee(),
+                title,
+                body,
+                notificationType,
+                "MENTORSHIP_REQUEST",
+                request.getId()
+        );
     }
 
     @Override
@@ -52,9 +105,11 @@ public class MentorshipServiceImpl implements MentorshipService {
         User mentor = userRepository.findById(mentorId)
                 .orElseThrow(() -> new RuntimeException("Mentor non trouvé"));
         
-        if (!mentor.getIsMentor()) {
-            throw new RuntimeException("Cet utilisateur n'est pas un mentor");
+        if (!mentor.getIsMentor() && !userOffersMentoring(mentor)) {
+            throw new RuntimeException("Cet utilisateur n'est pas disponible pour le mentorat");
         }
+
+        ensureNoActiveMentoring(mentor, mentee, null);
         
         MentoringRequest request = new MentoringRequest();
         request.setMentee(mentee);
@@ -78,6 +133,53 @@ public class MentorshipServiceImpl implements MentorshipService {
         return mapToRequestDTO(savedRequest);
     }
 
+    private boolean userOffersMentoring(User user) {
+        if (user.getWillingToHelps() == null) return false;
+        return user.getWillingToHelps().stream()
+                .anyMatch(h -> h.getOfferMentor() != null && !h.getOfferMentor().isBlank());
+    }
+
+    @Override
+    @Transactional
+    public MentoringRequestDTO createOffer(MentoringRequestDTO requestDTO) {
+        User mentor = getCurrentUserEntity();
+
+        if (!mentor.getIsMentor() && !userOffersMentoring(mentor)) {
+            throw new RuntimeException("Vous devez être mentor pour offrir un mentorat ou indiquer que vous offrez du mentorat dans vos préférences");
+        }
+
+        UUID menteeId = (requestDTO.getMentee() != null) ? requestDTO.getMentee().getId() : null;
+        if (menteeId == null) {
+            throw new RuntimeException("L'ID du mentee est obligatoire pour une offre");
+        }
+
+        User mentee = userRepository.findById(menteeId)
+                .orElseThrow(() -> new RuntimeException("Mentee non trouvé"));
+
+        ensureNoActiveMentoring(mentor, mentee, null);
+
+        MentoringRequest request = new MentoringRequest();
+        request.setMentee(mentee);
+        request.setMentor(mentor);
+        request.setMessage(requestDTO.getMessage());
+        request.setStatus(MentoringStatus.PENDING);
+
+        MentoringRequest savedRequest = requestRepository.save(request);
+        auditService.logAction("CREATE_MENTORING_OFFER", "MENTORSHIP", savedRequest.getId(), "Offre de mentorat envoyée à " + mentee.getEmail());
+
+        // Notify mentee
+        notificationService.createNotification(
+                mentee,
+                "Nouvelle offre de mentorat",
+                mentor.getFirstName() + " vous propose d'être votre mentor.",
+                NotificationType.MENTORING_REQUEST,
+                "MENTORSHIP_OFFER",
+                savedRequest.getId()
+        );
+
+        return mapToRequestDTO(savedRequest);
+    }
+
     @Override
     @Transactional
     public MentoringRequestDTO updateRequestStatus(UUID requestId, String statusStr) {
@@ -85,25 +187,34 @@ public class MentorshipServiceImpl implements MentorshipService {
                 .orElseThrow(() -> new RuntimeException("Demande non trouvée"));
         
         User currentUser = getCurrentUserEntity();
-        if (!request.getMentor().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Seul le mentor peut répondre à cette demande");
-        }
-        
+
         MentoringStatus status = MentoringStatus.valueOf(statusStr.toUpperCase());
+
+        // Allow only the mentor to accept or reject a pending request.
+        if (status == MentoringStatus.ACCEPTED || status == MentoringStatus.REJECTED) {
+            if (!request.getMentor().getId().equals(currentUser.getId())) {
+                throw new RuntimeException("Seul le mentor peut répondre à cette demande");
+            }
+        }
+
+        // Allow either party (mentor or mentee) to mark the mentorship as completed.
+        if (status == MentoringStatus.ACCEPTED) {
+            ensureNoActiveMentoring(request.getMentor(), request.getMentee(), requestId);
+        }
+
+        if (status == MentoringStatus.COMPLETED) {
+            boolean isParticipant = request.getMentor().getId().equals(currentUser.getId()) || request.getMentee().getId().equals(currentUser.getId());
+            if (!isParticipant) {
+                throw new RuntimeException("Vous n'êtes pas autorisé à terminer ce mentorat");
+            }
+        }
+
         request.setStatus(status);
         
         MentoringRequest updatedRequest = requestRepository.save(request);
         auditService.logAction("UPDATE_MENTORING_STATUS", "MENTORSHIP", requestId, "Statut de mentorat : " + status);
         
-        // Notify mentee
-        notificationService.createNotification(
-            request.getMentee(),
-            "Réponse mentorat",
-            request.getMentor().getFirstName() + " a " + status.toString().toLowerCase() + " votre demande.",
-            NotificationType.MENTORING_ACCEPTED,
-            "MENTORSHIP_REQUEST",
-            request.getId()
-        );
+        notifyMentoringStatus(updatedRequest, status);
         
         return mapToRequestDTO(updatedRequest);
     }

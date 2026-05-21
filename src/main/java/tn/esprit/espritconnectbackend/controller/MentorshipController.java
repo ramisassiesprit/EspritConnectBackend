@@ -22,6 +22,11 @@ public class MentorshipController {
         return ResponseEntity.ok(mentorshipService.createRequest(requestDTO));
     }
 
+    @PostMapping("/offers")
+    public ResponseEntity<MentoringRequestDTO> createOffer(@RequestBody MentoringRequestDTO requestDTO) {
+        return ResponseEntity.ok(mentorshipService.createOffer(requestDTO));
+    }
+
     @PutMapping("/requests/{id}/status")
     public ResponseEntity<MentoringRequestDTO> updateStatus(
             @PathVariable UUID id, 

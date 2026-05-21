@@ -11,6 +11,7 @@ public interface AuthService {
     AuthenticationResponse register(RegisterRequest request);
     AuthenticationResponse login(AuthenticationRequest request, HttpServletRequest servletRequest, HttpServletResponse response);
     AuthenticationResponse refreshToken(HttpServletRequest request, HttpServletResponse response);
+    AuthenticationResponse refreshToken(String refreshTokenValue, HttpServletResponse response);
     void logout(HttpServletRequest request, HttpServletResponse response);
     void forgotPassword(String email);
     void resetPassword(ResetPasswordRequest request);

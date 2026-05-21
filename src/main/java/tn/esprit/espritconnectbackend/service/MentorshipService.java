@@ -9,6 +9,8 @@ import java.util.UUID;
 public interface MentorshipService {
     // Request management
     MentoringRequestDTO createRequest(MentoringRequestDTO requestDTO);
+    // Mentor-initiated offer: current authenticated user offers mentoring to another user
+    MentoringRequestDTO createOffer(MentoringRequestDTO requestDTO);
     MentoringRequestDTO updateRequestStatus(UUID requestId, String status);
     List<MentoringRequestDTO> getMyReceivedRequests();
     List<MentoringRequestDTO> getMySentRequests();

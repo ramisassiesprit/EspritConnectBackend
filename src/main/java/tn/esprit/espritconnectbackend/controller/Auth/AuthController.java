@@ -40,8 +40,13 @@ public class AuthController {
     @PostMapping("/refresh-token")
     public ResponseEntity<AuthenticationResponse> refreshToken(
             HttpServletRequest request,
-            HttpServletResponse response
+            HttpServletResponse response,
+            @RequestBody(required = false) java.util.Map<String, String> body
     ) {
+        if (body != null && body.containsKey("refreshToken") && body.get("refreshToken") != null) {
+            AuthenticationResponse authResponse = authService.refreshToken(body.get("refreshToken"), response);
+            return ResponseEntity.ok(authResponse);
+        }
         AuthenticationResponse authResponse = authService.refreshToken(request, response);
         return ResponseEntity.ok(authResponse);
     }

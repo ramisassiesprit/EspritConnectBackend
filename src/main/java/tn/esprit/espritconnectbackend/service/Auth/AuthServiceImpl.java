@@ -160,6 +160,36 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public AuthenticationResponse refreshToken(String refreshTokenValue, HttpServletResponse response) {
+        if (refreshTokenValue == null) {
+            throw new IllegalArgumentException("Refresh token manquant");
+        }
+
+        String userEmail = jwtService.extractUsername(refreshTokenValue);
+        if (userEmail != null) {
+            User user = userRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé"));
+
+            if (jwtService.isTokenValid(refreshTokenValue, user)) {
+                String accessToken = jwtService.generateAccessToken(user);
+
+                // Optionnel : Rotation du refresh token
+                String newRefreshToken = jwtService.generateRefreshToken(user);
+                setRefreshTokenCookie(response, newRefreshToken, (int) (refreshExpiration / 1000));
+
+                AuthenticationResponse authResponse = new AuthenticationResponse();
+                authResponse.setAccessToken(accessToken);
+                authResponse.setRefreshToken(newRefreshToken);
+                authResponse.setUserId(user.getId());
+                authResponse.setRole(user.getRole());
+                authResponse.setExpiresIn(jwtExpiration);
+                return authResponse;
+            }
+        }
+        throw new IllegalArgumentException("Refresh token invalide");
+    }
+
+    @Override
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         // Supprimer le cookie
         Cookie cookie = new Cookie("refresh_token", null);

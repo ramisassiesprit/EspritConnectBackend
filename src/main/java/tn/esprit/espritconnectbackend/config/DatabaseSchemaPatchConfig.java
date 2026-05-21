@@ -49,5 +49,35 @@ public class DatabaseSchemaPatchConfig {
             }
         };
     }
-}
 
+    @Bean
+    public CommandLineRunner patchJobApplicationCoverLetterColumn() {
+        return args -> {
+            try {
+                String dataType = jdbcTemplate.queryForObject(
+                        "SELECT DATA_TYPE " +
+                                "FROM INFORMATION_SCHEMA.COLUMNS " +
+                                "WHERE TABLE_SCHEMA = DATABASE() " +
+                                "AND TABLE_NAME = 'job_application' " +
+                                "AND COLUMN_NAME = 'cover_letter_url'",
+                        String.class
+                );
+
+                if (dataType == null) {
+                    return;
+                }
+
+                String normalized = dataType.toUpperCase();
+                if (!normalized.contains("TEXT")) {
+                    jdbcTemplate.execute(
+                            "ALTER TABLE job_application " +
+                                    "MODIFY COLUMN cover_letter_url TEXT NULL"
+                    );
+                    log.info("Patched job_application.cover_letter_url column to TEXT");
+                }
+            } catch (Exception ex) {
+                log.warn("Unable to patch job_application.cover_letter_url automatically: {}", ex.getMessage());
+            }
+        };
+    }
+}

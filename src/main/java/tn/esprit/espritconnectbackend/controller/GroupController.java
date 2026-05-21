@@ -118,6 +118,17 @@ public class GroupController {
         return ResponseEntity.ok(groupService.addMember(id, userId, role));
     }
 
+    @PostMapping("/{id}/members/{userId}/approve")
+    public ResponseEntity<GroupMemberDTO> approveMember(@PathVariable UUID id, @PathVariable UUID userId) {
+        return ResponseEntity.ok(groupService.approveMember(id, userId));
+    }
+
+    @PostMapping("/{id}/members/{userId}/reject")
+    public ResponseEntity<Void> rejectMember(@PathVariable UUID id, @PathVariable UUID userId) {
+        groupService.rejectMember(id, userId);
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{id}/members/{userId}")
     public ResponseEntity<Void> removeMember(@PathVariable UUID id, @PathVariable UUID userId) {
         groupService.removeMember(id, userId);

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 import tn.esprit.espritconnectbackend.entities.enums.GroupMemberRole;
+import tn.esprit.espritconnectbackend.entities.enums.GroupMemberStatus;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -38,6 +39,11 @@ public class GroupMember {
     @Column(nullable = false)
     @Builder.Default
     private GroupMemberRole role = GroupMemberRole.MEMBER;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    @Builder.Default
+    private GroupMemberStatus status = GroupMemberStatus.APPROVED;
 
     @Column(name = "is_manual")
     @Builder.Default

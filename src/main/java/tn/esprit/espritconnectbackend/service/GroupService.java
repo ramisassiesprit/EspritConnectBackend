@@ -25,6 +25,8 @@ public interface GroupService {
     
     // Member management
     GroupMemberDTO addMember(UUID groupId, UUID userId, GroupMemberRole role);
+    GroupMemberDTO approveMember(UUID groupId, UUID userId);
+    void rejectMember(UUID groupId, UUID userId);
     void removeMember(UUID groupId, UUID userId);
     void leaveGroup(UUID groupId);
     GroupMemberDTO joinGroup(UUID groupId);

@@ -21,4 +21,5 @@ public class GroupMemberDTO {
     private String avatarUrl;
     private Boolean isOnline;
     private String userRole;
+    private String status;
 }

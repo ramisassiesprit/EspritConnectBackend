@@ -14,6 +14,7 @@ import tn.esprit.espritconnectbackend.entities.GroupMemberCriteria;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.GroupMemberRole;
 import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
+import tn.esprit.espritconnectbackend.entities.enums.GroupMemberStatus;
 import tn.esprit.espritconnectbackend.entities.enums.GroupStatus;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
 import tn.esprit.espritconnectbackend.repositories.GroupMemberCriteriaRepository;
@@ -85,8 +86,8 @@ public class GroupServiceImpl implements GroupService {
 
         Group savedGroup = groupRepository.save(group);
 
-        // Add creator as ADMIN member
-        addMemberToGroupEntity(savedGroup, creator, GroupMemberRole.ADMIN);
+        // Add creator as ADMIN member (approved)
+        addMemberToGroupEntity(savedGroup, creator, GroupMemberRole.ADMIN, GroupMemberStatus.APPROVED);
 
         auditService.logAction("CREATE_GROUP", "GROUP", savedGroup.getId(),
                 "Groupe créé : " + savedGroup.getGroupName());
@@ -322,7 +323,14 @@ public class GroupServiceImpl implements GroupService {
             throw new RuntimeException("L'utilisateur est déjà membre du groupe");
         }
 
-        GroupMember member = addMemberToGroupEntity(group, userToAdd, role);
+        // Decide initial membership status based on group privacy
+        GroupMemberStatus initialStatus = GroupMemberStatus.APPROVED;
+        if (group.getPrivacy() != null && group.getPrivacy() != tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy.PUBLIC) {
+            // For PRIVATE or SECRET groups, invitations/added-by-member should be pending approval
+            initialStatus = GroupMemberStatus.PENDING;
+        }
+
+        GroupMember member = addMemberToGroupEntity(group, userToAdd, role, initialStatus);
 
         // Notify user
         notificationService.createNotification(
@@ -337,6 +345,82 @@ public class GroupServiceImpl implements GroupService {
         broadcastGroupMembers(groupId);
         return memberDTO;
     }
+
+        @Override
+        @Transactional
+        public GroupMemberDTO approveMember(UUID groupId, UUID userId) {
+        Group group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+
+            // Only admins/owners can approve
+            User currentUser = getCurrentUserEntity();
+            checkGroupAdmin(group, currentUser);
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
+            .orElseThrow(() -> new RuntimeException("Membre non trouvé"));
+
+        if (member.getStatus() == GroupMemberStatus.APPROVED) {
+            return mapToMemberDTO(member);
+        }
+
+        member.setStatus(GroupMemberStatus.APPROVED);
+        GroupMember saved = groupMemberRepository.save(member);
+
+        // Update member count when approving
+        group.setMembersCount(group.getMembersCount() + 1);
+        groupRepository.save(group);
+
+        notificationService.createNotification(
+            user,
+            "Groupe",
+            "Votre demande pour rejoindre le groupe a été approuvée.",
+            NotificationType.GROUP_JOIN,
+            "GROUP",
+            group.getId()
+        );
+
+        auditService.logAction("APPROVE_MEMBER", "GROUP", groupId, "Membre approuvé: " + user.getEmail());
+        broadcastGroupMembers(groupId);
+        return mapToMemberDTO(saved);
+        }
+
+        @Override
+        @Transactional
+        public void rejectMember(UUID groupId, UUID userId) {
+        Group group = groupRepository.findById(groupId)
+            .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+
+            // Only admins/owners can reject
+            User currentUser = getCurrentUserEntity();
+            checkGroupAdmin(group, currentUser);
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
+            .orElseThrow(() -> new RuntimeException("Membre non trouvé"));
+
+        // Only remove pending entries on reject
+        if (member.getStatus() == GroupMemberStatus.PENDING) {
+            groupMemberRepository.delete(member);
+
+            // Do not decrement membersCount because pending were not counted
+            notificationService.createNotification(
+                user,
+                "Groupe",
+                "Votre demande pour rejoindre le groupe a été rejetée.",
+                NotificationType.GROUP_REJECTED,
+                "GROUP",
+                group.getId()
+            );
+
+            auditService.logAction("REJECT_MEMBER", "GROUP", groupId, "Membre rejeté: " + user.getEmail());
+            broadcastGroupMembers(groupId);
+        }
+        }
 
     @Override
     @Transactional
@@ -391,19 +475,37 @@ public class GroupServiceImpl implements GroupService {
         if (groupMemberRepository.existsByGroupAndUser(group, currentUser)) {
             throw new RuntimeException("Vous êtes déjà membre de ce groupe");
         }
+        // If the group is public, join immediately; otherwise create a pending request
+        GroupMemberStatus statusToSet = group.getPrivacy() == GroupPrivacy.PUBLIC ? GroupMemberStatus.APPROVED : GroupMemberStatus.PENDING;
 
-        GroupMember member = addMemberToGroupEntity(group, currentUser, GroupMemberRole.MEMBER);
+        GroupMember member = addMemberToGroupEntity(group, currentUser, GroupMemberRole.MEMBER, statusToSet);
 
-        // Notify user
-        notificationService.createNotification(
-                currentUser,
-                "Groupe rejoint",
-                "Vous avez rejoint le groupe : " + group.getGroupName(),
-                NotificationType.GROUP_JOIN,
-                "GROUP",
-                group.getId());
+        if (statusToSet == GroupMemberStatus.APPROVED) {
+            // Notify user of successful join
+            notificationService.createNotification(
+                    currentUser,
+                    "Groupe rejoint",
+                    "Vous avez rejoint le groupe : " + group.getGroupName(),
+                    NotificationType.GROUP_JOIN,
+                    "GROUP",
+                    group.getId());
 
-        auditService.logAction("JOIN_GROUP", "GROUP", groupId, "Utilisateur a rejoint le groupe");
+            auditService.logAction("JOIN_GROUP", "GROUP", groupId, "Utilisateur a rejoint le groupe");
+        } else {
+            // Notify group owner/admins about pending request
+            User owner = group.getCreator();
+            if (owner != null) {
+                notificationService.createNotification(
+                        owner,
+                        "Nouvelle demande de groupe",
+                        currentUser.getFirstName() + " " + currentUser.getLastName() + " a demandé à rejoindre le groupe : " + group.getGroupName(),
+                        NotificationType.GROUP_INVITE,
+                        "GROUP",
+                        group.getId());
+            }
+
+            auditService.logAction("REQUEST_JOIN_GROUP", "GROUP", groupId, "Utilisateur a demandé à rejoindre (pending): " + currentUser.getEmail());
+        }
 
         GroupMemberDTO memberDTO = mapToMemberDTO(member);
         broadcastGroupMembers(groupId);
@@ -430,17 +532,20 @@ public class GroupServiceImpl implements GroupService {
                 .collect(Collectors.toList());
     }
 
-    private GroupMember addMemberToGroupEntity(Group group, User user, GroupMemberRole role) {
+    private GroupMember addMemberToGroupEntity(Group group, User user, GroupMemberRole role, GroupMemberStatus status) {
         GroupMember member = new GroupMember();
         member.setGroup(group);
         member.setUser(user);
         member.setRole(role);
+        member.setStatus(status);
 
         GroupMember savedMember = groupMemberRepository.save(member);
 
-        // Update member count
-        group.setMembersCount(group.getMembersCount() + 1);
-        groupRepository.save(group);
+        // Update member count only if approved immediately
+        if (status == GroupMemberStatus.APPROVED) {
+            group.setMembersCount(group.getMembersCount() + 1);
+            groupRepository.save(group);
+        }
 
         return savedMember;
     }
@@ -510,6 +615,7 @@ public class GroupServiceImpl implements GroupService {
         dto.setRole(member.getRole());
         dto.setIsManual(member.getIsManual());
         dto.setJoinedAt(member.getJoinedAt());
+        dto.setStatus(member.getStatus() != null ? member.getStatus().name() : null);
         
         // Populate additional user profile details
         if (member.getUser() != null) {

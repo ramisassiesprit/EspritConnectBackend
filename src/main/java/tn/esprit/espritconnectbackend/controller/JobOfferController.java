@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.espritconnectbackend.dto.JobOfferDTO;
@@ -23,12 +24,14 @@ public class JobOfferController {
     private final JobOfferService jobOfferService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ENTREPRISE')")
     @Operation(summary = "Creer une offre d'emploi")
     public ResponseEntity<JobOfferDTO> create(@Valid @RequestBody JobOfferDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(jobOfferService.create(dto));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ENTREPRISE')")
     @Operation(summary = "Mettre a jour une offre d'emploi")
     public ResponseEntity<JobOfferDTO> update(@PathVariable UUID id, @Valid @RequestBody JobOfferDTO dto) {
         return ResponseEntity.ok(jobOfferService.update(id, dto));
@@ -46,13 +49,36 @@ public class JobOfferController {
         return ResponseEntity.ok(jobOfferService.getAll());
     }
 
+    @GetMapping("/pending")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Lister les offres en attente (Admin)")
+    public ResponseEntity<List<JobOfferDTO>> getPending() {
+        return ResponseEntity.ok(jobOfferService.getPending());
+    }
+
     @GetMapping("/mine")
+    @PreAuthorize("hasRole('ENTREPRISE')")
     @Operation(summary = "Lister mes offres")
     public ResponseEntity<List<JobOfferDTO>> getMine() {
         return ResponseEntity.ok(jobOfferService.getMine());
     }
 
+    @PatchMapping("/{id}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Approuver une offre (Admin)")
+    public ResponseEntity<JobOfferDTO> approve(@PathVariable UUID id) {
+        return ResponseEntity.ok(jobOfferService.approve(id));
+    }
+
+    @PatchMapping("/{id}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Rejeter une offre (Admin)")
+    public ResponseEntity<JobOfferDTO> reject(@PathVariable UUID id) {
+        return ResponseEntity.ok(jobOfferService.reject(id));
+    }
+
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ENTREPRISE')")
     @Operation(summary = "Supprimer une offre")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         jobOfferService.delete(id);
@@ -60,6 +86,7 @@ public class JobOfferController {
     }
 
     @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ENTREPRISE')")
     @Operation(summary = "Uploader une image pour une offre")
     public ResponseEntity<JobOfferDTO> uploadImage(
             @PathVariable UUID id,

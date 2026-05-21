@@ -11,7 +11,10 @@ public interface JobOfferService {
     JobOfferDTO update(UUID id, JobOfferDTO dto);
     JobOfferDTO getById(UUID id);
     List<JobOfferDTO> getAll();
+    List<JobOfferDTO> getPending();
     List<JobOfferDTO> getMine();
+    JobOfferDTO approve(UUID id);
+    JobOfferDTO reject(UUID id);
     JobOfferDTO uploadImage(UUID id, MultipartFile file);
     void delete(UUID id);
 }

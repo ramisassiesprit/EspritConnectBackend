@@ -9,6 +9,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tn.esprit.espritconnectbackend.dto.JobOfferDTO;
 import tn.esprit.espritconnectbackend.entities.JobOffer;
 import tn.esprit.espritconnectbackend.entities.User;
+import tn.esprit.espritconnectbackend.entities.enums.JobStatus;
 import tn.esprit.espritconnectbackend.entities.enums.UserRole;
 import tn.esprit.espritconnectbackend.exception.ForbiddenOperationException;
 import tn.esprit.espritconnectbackend.exception.ResourceNotFoundException;
@@ -34,8 +35,11 @@ public class JobOfferServiceImpl implements JobOfferService {
     @Transactional
     public JobOfferDTO create(JobOfferDTO dto) {
         User currentUser = getCurrentUser();
+        ensureCompany(currentUser);
         JobOffer jobOffer = new JobOffer();
         apply(dto, jobOffer);
+        jobOffer.setCompany(resolveCompanyName(currentUser));
+        jobOffer.setStatus(JobStatus.PENDING);
         jobOffer.setPublisher(currentUser);
         return toDto(jobOfferRepository.save(jobOffer));
     }
@@ -43,26 +47,65 @@ public class JobOfferServiceImpl implements JobOfferService {
     @Override
     @Transactional
     public JobOfferDTO update(UUID id, JobOfferDTO dto) {
+        User currentUser = getCurrentUser();
+        ensureCompany(currentUser);
         JobOffer jobOffer = findOrThrow(id);
-        ensureOwnerOrAdmin(jobOffer.getPublisher().getId());
+        ensureOwner(jobOffer.getPublisher().getId(), currentUser);
         apply(dto, jobOffer);
+        jobOffer.setCompany(resolveCompanyName(currentUser));
+        jobOffer.setStatus(JobStatus.PENDING);
         return toDto(jobOfferRepository.save(jobOffer));
     }
 
     @Override
     public JobOfferDTO getById(UUID id) {
-        return toDto(findOrThrow(id));
+        JobOffer entity = findOrThrow(id);
+        User currentUser = getCurrentUser();
+        boolean isAdmin = currentUser.getRole() == UserRole.ADMIN;
+        boolean isOwner = entity.getPublisher() != null && currentUser.getId().equals(entity.getPublisher().getId());
+        if (!isAdmin && !isOwner && entity.getStatus() != JobStatus.OPEN) {
+            throw new ForbiddenOperationException("Operation non autorisee");
+        }
+        return toDto(entity);
     }
 
     @Override
     public List<JobOfferDTO> getAll() {
-        return jobOfferRepository.findAll().stream().map(this::toDto).toList();
+        User currentUser = getCurrentUser();
+        if (currentUser.getRole() == UserRole.ADMIN) {
+            return jobOfferRepository.findAll().stream().map(this::toDto).toList();
+        }
+        return jobOfferRepository.findByStatus(JobStatus.OPEN).stream().map(this::toDto).toList();
+    }
+
+    @Override
+    public List<JobOfferDTO> getPending() {
+        ensureAdmin();
+        return jobOfferRepository.findByStatus(JobStatus.PENDING).stream().map(this::toDto).toList();
     }
 
     @Override
     public List<JobOfferDTO> getMine() {
         User currentUser = getCurrentUser();
         return jobOfferRepository.findByPublisherId(currentUser.getId()).stream().map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional
+    public JobOfferDTO approve(UUID id) {
+        ensureAdmin();
+        JobOffer jobOffer = findOrThrow(id);
+        jobOffer.setStatus(JobStatus.OPEN);
+        return toDto(jobOfferRepository.save(jobOffer));
+    }
+
+    @Override
+    @Transactional
+    public JobOfferDTO reject(UUID id) {
+        ensureAdmin();
+        JobOffer jobOffer = findOrThrow(id);
+        jobOffer.setStatus(JobStatus.REJECTED);
+        return toDto(jobOfferRepository.save(jobOffer));
     }
 
     @Transactional
@@ -98,7 +141,7 @@ public class JobOfferServiceImpl implements JobOfferService {
     @Transactional
     public void delete(UUID id) {
         JobOffer jobOffer = findOrThrow(id);
-        ensureOwnerOrAdmin(jobOffer.getPublisher().getId());
+        ensureOwner(jobOffer.getPublisher().getId(), getCurrentUser());
         jobOfferRepository.delete(jobOffer);
     }
 
@@ -121,6 +164,25 @@ public class JobOfferServiceImpl implements JobOfferService {
         }
     }
 
+    private void ensureOwner(UUID ownerId, User currentUser) {
+        if (!currentUser.getId().equals(ownerId)) {
+            throw new ForbiddenOperationException("Operation non autorisee");
+        }
+    }
+
+    private void ensureCompany(User currentUser) {
+        if (currentUser.getRole() != UserRole.ENTREPRISE) {
+            throw new ForbiddenOperationException("Seules les entreprises peuvent creer ou modifier des offres.");
+        }
+    }
+
+    private void ensureAdmin() {
+        User currentUser = getCurrentUser();
+        if (currentUser.getRole() != UserRole.ADMIN) {
+            throw new ForbiddenOperationException("Seul un administrateur peut approuver ou rejeter des offres.");
+        }
+    }
+
     private void apply(JobOfferDTO dto, JobOffer entity) {
         entity.setTitle(dto.getTitle());
         entity.setDescription(dto.getDescription());
@@ -137,7 +199,9 @@ public class JobOfferServiceImpl implements JobOfferService {
         if (dto.getImageUrl() != null) {
             entity.setImageUrl(dto.getImageUrl());
         }
-        entity.setStatus(dto.getStatus());
+        if (dto.getStatus() != null) {
+            entity.setStatus(dto.getStatus());
+        }
     }
 
     private JobOfferDTO toDto(JobOffer entity) {
@@ -189,5 +253,15 @@ public class JobOfferServiceImpl implements JobOfferService {
 
     private String sanitizeFileName(String fileName) {
         return fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    private String resolveCompanyName(User currentUser) {
+        if (currentUser.getCompanyName() != null && !currentUser.getCompanyName().trim().isEmpty()) {
+            return currentUser.getCompanyName().trim();
+        }
+        String firstName = currentUser.getFirstName() == null ? "" : currentUser.getFirstName().trim();
+        String lastName = currentUser.getLastName() == null ? "" : currentUser.getLastName().trim();
+        String fallback = (firstName + " " + lastName).trim();
+        return fallback.isEmpty() ? "Entreprise" : fallback;
     }
 }

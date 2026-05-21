@@ -24,6 +24,7 @@ public class GeminiApiService {
     private String apiKey;
 
     private static final String INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+    private static final String MODEL = "mistralai/ministral-14b-instruct-2512";
     private final ObjectMapper mapper = new ObjectMapper();
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -34,10 +35,12 @@ public class GeminiApiService {
             try {
                 // 1. Set up the Payload (Request Body)
                 Map<String, Object> payload = new HashMap<>();
-                payload.put("model", "mistralai/mistral-nemotron");
-                payload.put("max_tokens", 4096);
-                payload.put("temperature", 0.2);
-                payload.put("top_p", 0.7);
+                payload.put("model", MODEL);
+                payload.put("max_tokens", 2048);
+                payload.put("temperature", 0.15);
+                payload.put("top_p", 1.0);
+                payload.put("frequency_penalty", 0.0);
+                payload.put("presence_penalty", 0.0);
                 payload.put("stream", true); // Set to stream mode!
 
                 // 2. Configuring Core Orientation (The "Soft" Alignment)

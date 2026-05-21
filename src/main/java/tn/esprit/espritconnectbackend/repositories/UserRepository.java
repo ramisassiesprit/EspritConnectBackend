@@ -16,4 +16,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findByIsOnlineTrue();
     Optional<User> findByCode(String code);
     Optional<User> findByResetPasswordToken(String token);
+    long countByRoleIn(List<UserRole> roles);
 }

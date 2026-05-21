@@ -58,6 +58,8 @@ public class PostServiceImpl implements PostService {
         userDTO.setFirstName(post.getUser().getFirstName());
         userDTO.setLastName(post.getUser().getLastName());
         userDTO.setEmail(post.getUser().getEmail());
+        userDTO.setAvatarUrl(post.getUser().getAvatarUrl());
+        userDTO.setRole(post.getUser().getRole());
         dto.setUser(userDTO);
 
         List<String> images = new java.util.ArrayList<>();

@@ -78,7 +78,7 @@ public class JobOfferController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ENTREPRISE')")
+    @PreAuthorize("hasAnyRole('ENTREPRISE','ADMIN')")
     @Operation(summary = "Supprimer une offre")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         jobOfferService.delete(id);

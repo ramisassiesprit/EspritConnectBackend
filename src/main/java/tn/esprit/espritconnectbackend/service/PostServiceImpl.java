@@ -1,5 +1,6 @@
 package tn.esprit.espritconnectbackend.service;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import tn.esprit.espritconnectbackend.entities.Group;
 import tn.esprit.espritconnectbackend.entities.Post;
 import tn.esprit.espritconnectbackend.entities.PostFile;
 import tn.esprit.espritconnectbackend.entities.User;
+import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
 import tn.esprit.espritconnectbackend.entities.enums.PostType;
 import tn.esprit.espritconnectbackend.repositories.GroupRepository;
 import tn.esprit.espritconnectbackend.repositories.PostRepository;
@@ -226,8 +228,8 @@ public class PostServiceImpl implements PostService {
 
     @Override
     public List<PostDTO> getAllPosts() {
-        return postRepository.findAllByOrderByCreatedAtDesc()
-                .stream()
+        List<Post> posts = postRepository.findAllVisiblePosts(GroupPrivacy.PUBLIC);
+        return posts.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }

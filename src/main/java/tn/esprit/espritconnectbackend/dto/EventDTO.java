@@ -23,4 +23,5 @@ public class EventDTO {
     private UUID creatorId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Double matchScore;
 }

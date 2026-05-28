@@ -63,6 +63,13 @@ public class JobOfferController {
         return ResponseEntity.ok(jobOfferService.getMine());
     }
 
+    @GetMapping("/target-fields")
+    @PreAuthorize("hasRole('ENTREPRISE')")
+    @Operation(summary = "Lister les champs d'etude disponibles depuis les profils etudiants")
+    public ResponseEntity<List<String>> getTargetFieldOptions() {
+        return ResponseEntity.ok(jobOfferService.getTargetFieldOptions());
+    }
+
     @PatchMapping("/{id}/approve")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Approuver une offre (Admin)")
@@ -78,7 +85,7 @@ public class JobOfferController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ENTREPRISE')")
+    @PreAuthorize("hasAnyRole('ENTREPRISE','ADMIN')")
     @Operation(summary = "Supprimer une offre")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         jobOfferService.delete(id);

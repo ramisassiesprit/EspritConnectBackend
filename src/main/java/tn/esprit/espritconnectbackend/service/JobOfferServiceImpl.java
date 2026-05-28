@@ -13,6 +13,7 @@ import tn.esprit.espritconnectbackend.entities.enums.JobStatus;
 import tn.esprit.espritconnectbackend.entities.enums.UserRole;
 import tn.esprit.espritconnectbackend.exception.ForbiddenOperationException;
 import tn.esprit.espritconnectbackend.exception.ResourceNotFoundException;
+import tn.esprit.espritconnectbackend.repositories.EspritProfileRepository;
 import tn.esprit.espritconnectbackend.repositories.JobOfferRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 
@@ -22,14 +23,19 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class JobOfferServiceImpl implements JobOfferService {
     private static final Path JOBS_IMAGES_DIR = Paths.get("uploads/jobsImages").toAbsolutePath().normalize();
+    private static final String TARGET_FIELDS_SEPARATOR = "||";
     private final JobOfferRepository jobOfferRepository;
     private final UserRepository userRepository;
+    private final EspritProfileRepository espritProfileRepository;
 
     @Override
     @Transactional
@@ -88,6 +94,11 @@ public class JobOfferServiceImpl implements JobOfferService {
     public List<JobOfferDTO> getMine() {
         User currentUser = getCurrentUser();
         return jobOfferRepository.findByPublisherId(currentUser.getId()).stream().map(this::toDto).toList();
+    }
+
+    @Override
+    public List<String> getTargetFieldOptions() {
+        return espritProfileRepository.findDistinctFieldOfStudyValues();
     }
 
     @Override
@@ -196,6 +207,7 @@ public class JobOfferServiceImpl implements JobOfferService {
         entity.setDeadline(dto.getDeadline());
         entity.setApplyUrl(dto.getApplyUrl());
         entity.setAttachmentUrl(dto.getAttachmentUrl());
+        entity.setTargetFieldsOfStudy(serializeTargetFields(dto.getTargetFields()));
         if (dto.getImageUrl() != null) {
             entity.setImageUrl(dto.getImageUrl());
         }
@@ -220,6 +232,7 @@ public class JobOfferServiceImpl implements JobOfferService {
         dto.setDeadline(entity.getDeadline());
         dto.setApplyUrl(entity.getApplyUrl());
         dto.setAttachmentUrl(entity.getAttachmentUrl());
+        dto.setTargetFields(deserializeTargetFields(entity.getTargetFieldsOfStudy()));
         dto.setImageUrl(toPublicAssetUrl(entity.getImageUrl()));
         dto.setStatus(entity.getStatus());
         if (entity.getPublisher() != null) {
@@ -253,6 +266,31 @@ public class JobOfferServiceImpl implements JobOfferService {
 
     private String sanitizeFileName(String fileName) {
         return fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    private String serializeTargetFields(List<String> input) {
+        if (input == null || input.isEmpty()) {
+            return null;
+        }
+        LinkedHashSet<String> normalized = input.stream()
+                .filter(v -> v != null && !v.trim().isEmpty())
+                .map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return String.join(TARGET_FIELDS_SEPARATOR, normalized);
+    }
+
+    private List<String> deserializeTargetFields(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(stored.split("\\Q" + TARGET_FIELDS_SEPARATOR + "\\E"))
+                .map(String::trim)
+                .filter(v -> !v.isEmpty())
+                .distinct()
+                .toList();
     }
 
     private String resolveCompanyName(User currentUser) {

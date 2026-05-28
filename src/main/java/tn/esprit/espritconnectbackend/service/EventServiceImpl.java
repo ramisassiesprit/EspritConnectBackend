@@ -86,32 +86,23 @@ public class EventServiceImpl implements EventService {
     @Transactional
     public EventDTO createEvent(EventDTO eventDTO) {
         User creator = getCurrentUserEntity();
-        
+
         Event event = new Event();
-        event.setTitle(eventDTO.getTitle());
-        event.setDescription(eventDTO.getDescription());
-        event.setStartAt(eventDTO.getStartAt());
-        event.setEndAt(eventDTO.getEndAt());
-        event.setLocation(eventDTO.getLocation());
-        event.setCoverUrl(eventDTO.getCoverUrl());
-        event.setCapacity(eventDTO.getCapacity());
-        event.setTags(eventDTO.getTags());
-        event.setEventType(eventDTO.getEventType());
+        applyAllowedEventFields(event, eventDTO, true);
         event.setCreator(creator);
-        
         if (creator.getRole() == UserRole.ADMIN) {
             event.setStatus(EventStatus.UPCOMING);
         } else {
             event.setStatus(EventStatus.PENDING);
         }
-        
+
         Event savedEvent = eventRepository.save(event);
         auditService.logAction("CREATE_EVENT", "EVENT", savedEvent.getId(), "Événement créé : " + savedEvent.getTitle());
-        
+
         if (savedEvent.getStatus() == EventStatus.UPCOMING) {
             notifyAllUsersOfEvent(savedEvent);
         }
-        
+
         return mapToDTO(savedEvent);
     }
 
@@ -125,18 +116,12 @@ public class EventServiceImpl implements EventService {
         if (!event.getCreator().getId().equals(currentUser.getId()) && currentUser.getRole() != UserRole.ADMIN) {
             throw new RuntimeException("Seul le créateur ou un administrateur peut modifier l'événement");
         }
-        
-        event.setTitle(eventDTO.getTitle());
-        event.setDescription(eventDTO.getDescription());
-        event.setStartAt(eventDTO.getStartAt());
-        event.setEndAt(eventDTO.getEndAt());
-        event.setLocation(eventDTO.getLocation());
-        event.setCoverUrl(eventDTO.getCoverUrl());
-        event.setCapacity(eventDTO.getCapacity());
-        event.setTags(eventDTO.getTags());
-        event.setEventType(eventDTO.getEventType());
-        event.setStatus(eventDTO.getStatus());
-        
+
+        applyAllowedEventFields(event, eventDTO, false);
+        if (currentUser.getRole() == UserRole.ADMIN && eventDTO.getStatus() != null) {
+            event.setStatus(eventDTO.getStatus());
+        }
+
         Event updatedEvent = eventRepository.save(event);
         auditService.logAction("UPDATE_EVENT", "EVENT", updatedEvent.getId(), "Événement mis à jour");
         
@@ -381,43 +366,127 @@ public class EventServiceImpl implements EventService {
     @Transactional(readOnly = true)
     public List<EventDTO> getRecommendedEvents() {
         User currentUser = getCurrentUserEntity();
-        List<Event> upcomingEvents = eventRepository.findAll().stream()
+
+        // Récupérer IDs des événements où l'utilisateur est déjà inscrit
+        Set<UUID> registeredEventIds = registrationRepository.findByUser(currentUser)
+                .stream()
+                .map(r -> r.getEvent().getId())
+                .collect(Collectors.toSet());
+
+        // Récupérer candidats : événements approuvés/publies/à venir
+        List<Event> candidates = eventRepository.findAll().stream()
                 .filter(e -> e.getStatus() == EventStatus.UPCOMING || e.getStatus() == EventStatus.PUBLISHED)
-                .toList();
-        
-        return upcomingEvents.stream()
-                .map(event -> {
-                    int score = 0;
-                    
+                .filter(e -> !e.getCreator().getId().equals(currentUser.getId()))
+                .filter(e -> !registeredEventIds.contains(e.getId()))
+                .collect(Collectors.toList());
+
+        // Préparer profils utilisateur (tags, skills, field)
+        Set<String> userSkillTokens = tokenizeCollection(
+                currentUser.getSkills() == null ? List.of() :
+                        currentUser.getSkills().stream().map(s -> s.getName()).collect(Collectors.toList())
+        );
+        Set<String> userTags = new java.util.HashSet<>();
+        if (currentUser.getEspritProfile() != null && currentUser.getEspritProfile().getFieldOfStudy() != null) {
+            userTags.addAll(tokenizeString(currentUser.getEspritProfile().getFieldOfStudy()));
+        }
+
+        double wTag = 0.35;
+        double wField = 0.25;
+        double wSkill = 0.20;
+        double wPopularity = 0.10;
+        double wRecency = 0.10;
+
+        long nowEpochDays = java.time.LocalDate.now().toEpochDay();
+
+        List<ScoredEvent> scored = candidates.stream()
+                .map(e -> {
+                    // tokens from event (tags + title + description)
+                    Set<String> eventTokens = new java.util.HashSet<>();
+                    if (e.getTags() != null) eventTokens.addAll(tokenizeString(e.getTags()));
+                    eventTokens.addAll(tokenizeString(e.getTitle()));
+                    if (e.getDescription() != null) eventTokens.addAll(tokenizeString(e.getDescription()));
+
+                    double tagScore = jaccard(userTags, eventTokens); // match on field + tags
+                    double fieldScore = 0.0;
                     if (currentUser.getEspritProfile() != null && currentUser.getEspritProfile().getFieldOfStudy() != null) {
                         String field = currentUser.getEspritProfile().getFieldOfStudy().toLowerCase();
-                        if (event.getTitle().toLowerCase().contains(field) 
-                                || (event.getDescription() != null && event.getDescription().toLowerCase().contains(field))
-                                || (event.getTags() != null && event.getTags().toLowerCase().contains(field))) {
-                            score += 3;
-                        }
+                        if (containsToken(eventTokens, field)) fieldScore = 1.0;
                     }
-                    
-                    if (currentUser.getSkills() != null && !currentUser.getSkills().isEmpty()) {
-                        for (var skill : currentUser.getSkills()) {
-                            String skillName = skill.getName().toLowerCase();
-                            if (event.getTitle().toLowerCase().contains(skillName)
-                                    || (event.getDescription() != null && event.getDescription().toLowerCase().contains(skillName))
-                                     || (event.getTags() != null && event.getTags().toLowerCase().contains(skillName))) {
-                                score += 2;
-                            }
-                        }
+
+                    double skillScore = 0.0;
+                    if (!userSkillTokens.isEmpty()) {
+                        Set<String> intersection = new java.util.HashSet<>(userSkillTokens);
+                        intersection.retainAll(eventTokens);
+                        skillScore = (double) intersection.size() / Math.max(userSkillTokens.size(), 1);
                     }
-                    
-                    final int finalScore = score;
-                    return new Object() {
-                        final Event evt = event;
-                        final int scr = finalScore;
-                    };
+
+                    // popularity normalized: log scale
+                    double popularity = Math.log(1 + Math.max(0, e.getRegisteredCount() == null ? 0 : e.getRegisteredCount()));
+                    // normalize popularity against an expected max (e.g., 10) to keep in [0,1]
+                    double popularityNorm = Math.tanh(popularity / 3.0); // smooth normalization
+
+                    // recency: days since creation
+                    long daysSince = e.getCreatedAt() == null ? 365 : java.time.Duration.between(e.getCreatedAt(), LocalDateTime.now()).toDays();
+                    double recency = Math.exp(- (double) daysSince / 30.0); // 30-day half-life-ish
+
+                    double score = wTag * tagScore + wField * fieldScore + wSkill * skillScore
+                            + wPopularity * popularityNorm + wRecency * recency;
+
+                    return new ScoredEvent(e, score);
                 })
-                .sorted((o1, o2) -> Integer.compare(o2.scr, o1.scr))
-                .map(o -> mapToDTO(o.evt))
+                .sorted((s1, s2) -> Double.compare(s2.score, s1.score))
+                .limit(20) // limiter le nombre de recommandations
                 .collect(Collectors.toList());
+
+        return scored.stream().map(se -> {
+            EventDTO dto = mapToDTO(se.event);
+            dto.setMatchScore(se.score);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    // Helper container
+    private static class ScoredEvent {
+        final Event event;
+        final double score;
+        ScoredEvent(Event event, double score) { this.event = event; this.score = score; }
+    }
+
+    // Tokenize helpers
+    private static Set<String> tokenizeString(String text) {
+        if (text == null || text.isBlank()) return Collections.emptySet();
+        String norm = text.toLowerCase().replaceAll("[^a-z0-9\\s,]", " ");
+        String[] parts = norm.split("[,\\s]+");
+        return Arrays.stream(parts)
+                .filter(s -> !s.isBlank())
+                .map(String::trim)
+                .collect(Collectors.toSet());
+    }
+
+    private static Set<String> tokenizeCollection(Collection<String> items) {
+        Set<String> out = new java.util.HashSet<>();
+        if (items == null) return out;
+        for (String it : items) {
+            if (it != null) out.addAll(tokenizeString(it));
+        }
+        return out;
+    }
+
+    private static double jaccard(Set<String> a, Set<String> b) {
+        if ((a == null || a.isEmpty()) && (b == null || b.isEmpty())) return 0.0;
+        if (a == null) a = Collections.emptySet();
+        if (b == null) b = Collections.emptySet();
+        Set<String> inter = new java.util.HashSet<>(a);
+        inter.retainAll(b);
+        Set<String> union = new java.util.HashSet<>(a);
+        union.addAll(b);
+        return union.isEmpty() ? 0.0 : (double) inter.size() / union.size();
+    }
+
+    private static boolean containsToken(Set<String> tokens, String value) {
+        if (value == null || value.isBlank()) return false;
+        String v = value.toLowerCase().trim();
+        return tokens.stream().anyMatch(t -> t.equals(v) || t.contains(v) || v.contains(t));
     }
 
     @Override
@@ -647,6 +716,58 @@ public class EventServiceImpl implements EventService {
 
         log.info("Statistiques d'événements générées avec succès");
         return stats;
+    }
+    private String normalizeTags(String rawTags) {
+        if (rawTags == null) return null;
+        // split on comma or semicolon or whitespace, keep tokens of length>0
+        String[] parts = rawTags.toLowerCase()
+                .replace(';', ',')
+                .split(",");
+        // trim, remove empties, remove duplicates, enforce max tag length and max count
+        Set<String> set = new LinkedHashSet<>();
+        for (String p : parts) {
+            String t = p.trim();
+            if (t.isEmpty()) continue;
+            // optionally remove non-alphanum except dash/underscore
+            t = t.replaceAll("[^a-z0-9\\-\\_\\s]", "").trim();
+            if (t.isEmpty()) continue;
+            if (t.length() > 50) t = t.substring(0, 50); // cap length
+            set.add(t);
+            if (set.size() >= 20) break; // limit number of tags
+        }
+        return String.join(",", set);
+    }
+    private void applyAllowedEventFields(Event event, EventDTO dto, boolean isCreate) {
+        event.setTitle(dto.getTitle());
+        event.setDescription(dto.getDescription());
+        event.setStartAt(dto.getStartAt());
+        event.setEndAt(dto.getEndAt());
+        event.setLocation(dto.getLocation());
+        event.setCoverUrl(dto.getCoverUrl());
+
+        // capacity validation
+        if (dto.getCapacity() != null) {
+            int newCap = dto.getCapacity();
+            if (newCap < 0) throw new IllegalArgumentException("Capacity must be >= 0");
+            Integer currentRegistered = event.getRegisteredCount() == null ? 0 : event.getRegisteredCount();
+            if (!isCreate && newCap < currentRegistered) {
+                throw new IllegalArgumentException("La capacité ne peut pas être inférieure au nombre d'inscrits (" + currentRegistered + ")");
+            }
+            event.setCapacity(newCap);
+        }
+
+        // event type
+        if (dto.getEventType() != null) {
+            event.setEventType(dto.getEventType());
+        }
+
+        // TAGS — autoriser (nécessaire pour recommendation)
+        if (dto.getTags() != null) {
+            String normalized = normalizeTags(dto.getTags());
+            event.setTags(normalized);
+        }
+
+        // Ne PAS appliquer d'autres champs comme waitlistEnabled, registeredCount, createdAt, etc.
     }
 
     private EventDTO mapToDTO(Event event) {

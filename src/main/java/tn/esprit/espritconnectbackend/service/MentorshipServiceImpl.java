@@ -5,9 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.espritconnectbackend.dto.EspritProfileDTO;
+import tn.esprit.espritconnectbackend.dto.MentorMatchDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringRequestDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringSessionDTO;
 import tn.esprit.espritconnectbackend.dto.UserDTO;
+import tn.esprit.espritconnectbackend.entities.EspritProfile;
 import tn.esprit.espritconnectbackend.entities.MentoringRequest;
 import tn.esprit.espritconnectbackend.entities.MentoringSession;
 import tn.esprit.espritconnectbackend.entities.User;
@@ -17,8 +20,14 @@ import tn.esprit.espritconnectbackend.repositories.MentoringRequestRepository;
 import tn.esprit.espritconnectbackend.repositories.MentoringSessionRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +36,7 @@ import java.util.stream.Collectors;
 public class MentorshipServiceImpl implements MentorshipService {
 
     private static final List<MentoringStatus> ACTIVE_STATUSES = List.of(MentoringStatus.ACCEPTED);
+    private static final int TOP_RECOMMENDATIONS_LIMIT = 10;
 
     private final MentoringRequestRepository requestRepository;
     private final MentoringSessionRepository sessionRepository;
@@ -276,6 +286,189 @@ public class MentorshipServiceImpl implements MentorshipService {
         return sessionRepository.findByRequest(request).stream()
                 .map(this::mapToSessionDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MentorMatchDTO> getRecommendedMentors(UUID userId) {
+        User currentUser = userId != null
+                ? userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"))
+                : getCurrentUserEntity();
+        EspritProfile seekerProfile = currentUser.getEspritProfile();
+
+        if (seekerProfile == null) {
+            return List.of();
+        }
+
+        return userRepository.findMentorCandidatesForMatching(currentUser.getId())
+                .stream()
+                .map(candidate -> buildMatch(seekerProfile, currentUser, candidate))
+                .sorted(Comparator.comparingDouble(MentorMatchDTO::getMatchPercentage).reversed()
+                        .thenComparing(match -> safe(match.getUser() == null ? null : match.getUser().getFirstName()), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(match -> safe(match.getUser() == null ? null : match.getUser().getLastName()), String.CASE_INSENSITIVE_ORDER))
+                .limit(TOP_RECOMMENDATIONS_LIMIT)
+                .collect(Collectors.toList());
+    }
+
+    private MentorMatchDTO buildMatch(EspritProfile seekerProfile, User seeker, User candidate) {
+        EspritProfile candidateProfile = candidate.getEspritProfile();
+        List<String> matchedSignals = new ArrayList<>();
+
+        double score = 0.0;
+        double maxScore = 0.0;
+
+        score += scoreTextCriterion(seekerProfile.getFieldOfStudy(), candidateProfile == null ? null : candidateProfile.getFieldOfStudy(), 30, "Field of study", matchedSignals);
+        maxScore += isBlank(seekerProfile.getFieldOfStudy()) ? 0 : 30;
+
+        score += scoreTextCriterion(seekerProfile.getProgram(), candidateProfile == null ? null : candidateProfile.getProgram(), 20, "Program", matchedSignals);
+        maxScore += isBlank(seekerProfile.getProgram()) ? 0 : 20;
+
+        score += scoreTextCriterion(seekerProfile.getDegree(), candidateProfile == null ? null : candidateProfile.getDegree(), 20, "Degree", matchedSignals);
+        maxScore += isBlank(seekerProfile.getDegree()) ? 0 : 20;
+
+        score += scoreTextCriterion(seekerProfile.getInstitution(), candidateProfile == null ? null : candidateProfile.getInstitution(), 10, "Institution", matchedSignals);
+        maxScore += isBlank(seekerProfile.getInstitution()) ? 0 : 10;
+
+        score += scoreYearCriterion(seekerProfile.getGraduationYear(), candidateProfile == null ? null : candidateProfile.getGraduationYear());
+        maxScore += seekerProfile.getGraduationYear() == null ? 0 : 5;
+
+        Set<String> seekerSkills = normalizeSkillSet(seeker.getSkills());
+        if (!seekerSkills.isEmpty()) {
+            Set<String> candidateSkills = normalizeSkillSet(candidate.getSkills());
+            double skillSimilarity = overlapRatio(seekerSkills, candidateSkills);
+            if (skillSimilarity > 0.0) {
+                matchedSignals.add("Skills");
+            }
+            score += 15 * skillSimilarity;
+            maxScore += 15;
+        }
+
+        double matchPercentage = maxScore == 0.0 ? 0.0 : (score / maxScore) * 100.0;
+
+        MentorMatchDTO dto = new MentorMatchDTO();
+        dto.setUser(mapToUserDTO(candidate));
+        dto.setEspritProfile(candidateProfile == null ? null : mapToEspritProfileDTO(candidateProfile));
+        dto.setMatchPercentage(Math.max(0.0, Math.min(100.0, matchPercentage)));
+        dto.setMatchedSignals(matchedSignals);
+        return dto;
+    }
+
+    private double scoreTextCriterion(String seekerValue, String candidateValue, int weight, String signalLabel, List<String> matchedSignals) {
+        if (isBlank(seekerValue)) {
+            return 0.0;
+        }
+
+        double similarity = textSimilarity(seekerValue, candidateValue);
+        if (similarity > 0.0) {
+            matchedSignals.add(signalLabel);
+        }
+        return weight * similarity;
+    }
+
+    private double scoreYearCriterion(Integer seekerYear, Integer candidateYear) {
+        if (seekerYear == null || candidateYear == null) {
+            return 0.0;
+        }
+
+        int difference = Math.abs(seekerYear - candidateYear);
+        double similarity = Math.max(0.0, 1.0 - (difference / 10.0));
+        return 5.0 * similarity;
+    }
+
+    private double textSimilarity(String seekerValue, String candidateValue) {
+        if (isBlank(seekerValue) || isBlank(candidateValue)) {
+            return 0.0;
+        }
+
+        String left = normalize(seekerValue);
+        String right = normalize(candidateValue);
+
+        if (left.equals(right)) {
+            return 1.0;
+        }
+
+        if (left.contains(right) || right.contains(left)) {
+            return 0.85;
+        }
+
+        Set<String> leftTokens = tokenize(left);
+        Set<String> rightTokens = tokenize(right);
+        if (leftTokens.isEmpty() || rightTokens.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> intersection = new HashSet<>(leftTokens);
+        intersection.retainAll(rightTokens);
+        if (intersection.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> union = new HashSet<>(leftTokens);
+        union.addAll(rightTokens);
+        return (double) intersection.size() / union.size();
+    }
+
+    private Set<String> normalizeSkillSet(Set<?> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return Set.of();
+        }
+
+        Set<String> normalized = new HashSet<>();
+        for (Object skill : skills) {
+            if (skill instanceof tn.esprit.espritconnectbackend.entities.Skill typedSkill && !isBlank(typedSkill.getName())) {
+                normalized.add(normalize(typedSkill.getName()));
+            }
+        }
+        return normalized;
+    }
+
+    private double overlapRatio(Set<String> seekerSkills, Set<String> candidateSkills) {
+        if (seekerSkills.isEmpty() || candidateSkills.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> intersection = new HashSet<>(seekerSkills);
+        intersection.retainAll(candidateSkills);
+        if (intersection.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> union = new HashSet<>(seekerSkills);
+        union.addAll(candidateSkills);
+        return (double) intersection.size() / union.size();
+    }
+
+    private Set<String> tokenize(String value) {
+        if (isBlank(value)) {
+            return Set.of();
+        }
+
+        return Arrays.stream(normalize(value).split("\\s+"))
+                .filter(token -> !token.isBlank())
+                .collect(Collectors.toSet());
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private EspritProfileDTO mapToEspritProfileDTO(EspritProfile profile) {
+        EspritProfileDTO dto = new EspritProfileDTO();
+        dto.setId(profile.getId());
+        dto.setFieldOfStudy(profile.getFieldOfStudy());
+        dto.setDegree(profile.getDegree());
+        dto.setGraduationYear(profile.getGraduationYear());
+        dto.setProgram(profile.getProgram());
+        dto.setInstitution(profile.getInstitution());
+        return dto;
     }
 
     private MentoringRequestDTO mapToRequestDTO(MentoringRequest request) {

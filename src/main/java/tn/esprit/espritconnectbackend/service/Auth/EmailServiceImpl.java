@@ -102,4 +102,34 @@ public class EmailServiceImpl implements EmailService {
             System.err.println("=========================================================================");
         }
     }
+
+    @Override
+    public void sendVideoChatEmail(String to, String topic, String message, String date, String meetLink, String senderName) {
+        try {
+            jakarta.mail.internet.MimeMessage mimeMessage = mailSender.createMimeMessage();
+            org.springframework.mail.javamail.MimeMessageHelper helper = new org.springframework.mail.javamail.MimeMessageHelper(mimeMessage, true, "UTF-8");
+            
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject("Invitation to a Video Chat: " + topic);
+
+            String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #ddd; border-radius: 8px;\">" +
+                    "<h2 style=\"color: #C00000;\">Video Chat Invitation</h2>" +
+                    "<p>Hello,</p>" +
+                    "<p><b>" + senderName + "</b> has invited you to a video chat.</p>" +
+                    "<p><b>Topic:</b> " + topic + "</p>" +
+                    "<p><b>Date:</b> " + date + "</p>" +
+                    "<p><b>Message:</b> " + message + "</p>" +
+                    "<br/>" +
+                    "<div style=\"text-align: center;\">" +
+                    "<a href=\"" + meetLink + "\" style=\"background-color: #C00000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;\">Join Google Meet</a>" +
+                    "</div>" +
+                    "</div>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            System.err.println("⚠️ Could not send video chat email: " + e.getMessage());
+        }
+    }
 }

@@ -11,6 +11,7 @@ import tn.esprit.espritconnectbackend.entities.enums.JobStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -58,6 +59,7 @@ public class JobOfferDTO {
             message = "Le lien de piece jointe doit commencer par http:// ou https://"
     )
     private String attachmentUrl;
+    private List<String> targetFields;
 
     @Size(max = 1000, message = "Le lien de l'image est trop long")
     @Pattern(

@@ -15,6 +15,20 @@ public class DatabaseSchemaPatchConfig {
     private final JdbcTemplate jdbcTemplate;
 
     @Bean
+    public CommandLineRunner patchUsersAvatarAndBanner() {
+        return args -> {
+            try {
+                // Ensure avatar_url and banner_url use LONGTEXT to accept base64
+                jdbcTemplate.execute("ALTER TABLE users MODIFY COLUMN avatar_url LONGTEXT");
+                jdbcTemplate.execute("ALTER TABLE users MODIFY COLUMN banner_url LONGTEXT");
+                log.info("Patched users.avatar_url and users.banner_url to LONGTEXT via schema patcher");
+            } catch (Exception ex) {
+                log.warn("Unable to patch users avatar/banner to LONGTEXT automatically: {}", ex.getMessage());
+            }
+        };
+    }
+
+    @Bean
     public CommandLineRunner patchJobStatusEnum() {
         return args -> {
             try {
@@ -77,6 +91,32 @@ public class DatabaseSchemaPatchConfig {
                 }
             } catch (Exception ex) {
                 log.warn("Unable to patch job_application.cover_letter_url automatically: {}", ex.getMessage());
+            }
+        };
+    }
+
+    @Bean
+    public CommandLineRunner patchJobOfferTargetFieldsColumn() {
+        return args -> {
+            try {
+                Integer columnCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) " +
+                                "FROM INFORMATION_SCHEMA.COLUMNS " +
+                                "WHERE TABLE_SCHEMA = DATABASE() " +
+                                "AND TABLE_NAME = 'job_offer' " +
+                                "AND COLUMN_NAME = 'target_fields_of_study'",
+                        Integer.class
+                );
+
+                if (columnCount == null || columnCount == 0) {
+                    jdbcTemplate.execute(
+                            "ALTER TABLE job_offer " +
+                                    "ADD COLUMN target_fields_of_study TEXT NULL"
+                    );
+                    log.info("Patched job_offer.target_fields_of_study column (added)");
+                }
+            } catch (Exception ex) {
+                log.warn("Unable to patch job_offer.target_fields_of_study automatically: {}", ex.getMessage());
             }
         };
     }

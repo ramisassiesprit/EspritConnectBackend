@@ -13,6 +13,7 @@ public interface JobOfferService {
     List<JobOfferDTO> getAll();
     List<JobOfferDTO> getPending();
     List<JobOfferDTO> getMine();
+    List<String> getTargetFieldOptions();
     JobOfferDTO approve(UUID id);
     JobOfferDTO reject(UUID id);
     JobOfferDTO uploadImage(UUID id, MultipartFile file);

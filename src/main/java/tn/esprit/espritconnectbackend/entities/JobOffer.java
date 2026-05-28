@@ -67,6 +67,9 @@ public class JobOffer {
     @Column(name = "attachment_url", length = 1000)
     private String attachmentUrl;
 
+    @Column(name = "target_fields_of_study", columnDefinition = "TEXT")
+    private String targetFieldsOfStudy;
+
     @Column(name = "image_url", length = 1000)
     private String imageUrl;
 

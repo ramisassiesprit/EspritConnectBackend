@@ -80,4 +80,30 @@ public class DatabaseSchemaPatchConfig {
             }
         };
     }
+
+    @Bean
+    public CommandLineRunner patchJobOfferTargetFieldsColumn() {
+        return args -> {
+            try {
+                Integer columnCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) " +
+                                "FROM INFORMATION_SCHEMA.COLUMNS " +
+                                "WHERE TABLE_SCHEMA = DATABASE() " +
+                                "AND TABLE_NAME = 'job_offer' " +
+                                "AND COLUMN_NAME = 'target_fields_of_study'",
+                        Integer.class
+                );
+
+                if (columnCount == null || columnCount == 0) {
+                    jdbcTemplate.execute(
+                            "ALTER TABLE job_offer " +
+                                    "ADD COLUMN target_fields_of_study TEXT NULL"
+                    );
+                    log.info("Patched job_offer.target_fields_of_study column (added)");
+                }
+            } catch (Exception ex) {
+                log.warn("Unable to patch job_offer.target_fields_of_study automatically: {}", ex.getMessage());
+            }
+        };
+    }
 }

@@ -59,6 +59,7 @@ public class SecurityConfig {
                         "/resourceCovers/**",
                         "/uploads/**"
                 ).permitAll()
+                    .requestMatchers("/mentorship/recommendations").permitAll()
                 .requestMatchers("/profile/**").authenticated()
                 .anyRequest().authenticated()
             )

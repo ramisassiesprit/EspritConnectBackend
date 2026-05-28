@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.espritconnectbackend.dto.JobApplicationDTO;
 import tn.esprit.espritconnectbackend.entities.enums.ApplicationStatus;
 import tn.esprit.espritconnectbackend.service.JobApplicationService;
@@ -20,6 +21,12 @@ import java.util.UUID;
 @Tag(name = "Job Applications", description = "Gestion des candidatures")
 public class JobApplicationController {
     private final JobApplicationService jobApplicationService;
+
+    @PostMapping("/upload-cv")
+    @Operation(summary = "Uploader un CV pour candidature interne")
+    public ResponseEntity<String> uploadCv(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(jobApplicationService.uploadCv(file));
+    }
 
     @PostMapping
     @Operation(summary = "Postuler a une offre")

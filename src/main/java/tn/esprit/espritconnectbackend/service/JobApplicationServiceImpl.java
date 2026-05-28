@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tn.esprit.espritconnectbackend.dto.JobApplicationDTO;
 import tn.esprit.espritconnectbackend.entities.JobApplication;
 import tn.esprit.espritconnectbackend.entities.JobOffer;
@@ -21,12 +23,46 @@ import tn.esprit.espritconnectbackend.repositories.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.io.IOException;
 
 @Service
 @RequiredArgsConstructor
 public class JobApplicationServiceImpl implements JobApplicationService {
+    private static final Path JOB_APPLICATIONS_CV_DIR = Paths.get("uploads/jobApplicationsCv").toAbsolutePath().normalize();
     private static final Pattern FILE_URL_PATTERN =
             Pattern.compile("(?i)^https?://.+\\.(pdf|doc|docx)(\\?.*)?$");
+    private static final Pattern FILE_NAME_SAFE_PATTERN = Pattern.compile("[\\\\/:*?\"<>|]");
+
+    @Override
+    @Transactional
+    public String uploadCv(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Le fichier CV est obligatoire");
+        }
+        String original = file.getOriginalFilename() == null ? "cv.pdf" : file.getOriginalFilename();
+        String extension = extractExtension(original).toLowerCase();
+        if (!List.of("pdf", "doc", "docx").contains(extension)) {
+            throw new BadRequestException("Format CV invalide: .pdf/.doc/.docx requis");
+        }
+
+        try {
+            Files.createDirectories(JOB_APPLICATIONS_CV_DIR);
+            String safeName = sanitizeFileName(original);
+            String storedName = UUID.randomUUID() + "_" + safeName;
+            Path target = JOB_APPLICATIONS_CV_DIR.resolve(storedName).normalize();
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path("/uploads/jobApplicationsCv/")
+                    .path(storedName)
+                    .toUriString();
+        } catch (IOException ex) {
+            throw new RuntimeException("Erreur lors de l'upload du CV", ex);
+        }
+    }
 
     private final JobApplicationRepository jobApplicationRepository;
     private final JobOfferRepository jobOfferRepository;
@@ -44,8 +80,6 @@ public class JobApplicationServiceImpl implements JobApplicationService {
                 });
 
         validateDocumentUrl(dto.getCvUrl(), "CV");
-        validateDocumentUrl(dto.getCoverLetterUrl(), "Lettre de motivation");
-
         JobApplication entity = new JobApplication();
         entity.setApplicant(applicant);
         entity.setJobOffer(jobOffer);
@@ -65,7 +99,6 @@ public class JobApplicationServiceImpl implements JobApplicationService {
         }
 
         validateDocumentUrl(dto.getCvUrl(), "CV");
-        validateDocumentUrl(dto.getCoverLetterUrl(), "Lettre de motivation");
         entity.setCvUrl(dto.getCvUrl());
         entity.setCoverLetterUrl(dto.getCoverLetterUrl());
         return toDto(jobApplicationRepository.save(entity));
@@ -161,9 +194,42 @@ public class JobApplicationServiceImpl implements JobApplicationService {
         dto.setJobOfferId(entity.getJobOffer() != null ? entity.getJobOffer().getId() : null);
         dto.setCvUrl(entity.getCvUrl());
         dto.setCoverLetterUrl(entity.getCoverLetterUrl());
+        if (entity.getApplicant() != null) {
+            dto.setApplicantFirstName(entity.getApplicant().getFirstName());
+            dto.setApplicantLastName(entity.getApplicant().getLastName());
+            dto.setApplicantEmail(entity.getApplicant().getEmail());
+            dto.setApplicantNumTel(entity.getApplicant().getNumTel());
+            dto.setApplicantAvatarUrl(entity.getApplicant().getAvatarUrl());
+            dto.setApplicantJobTitle(entity.getApplicant().getJobTitle());
+            dto.setApplicantIndustry(entity.getApplicant().getIndustry());
+            dto.setApplicantJobFunction(entity.getApplicant().getJobFunction());
+            dto.setApplicantLinkedinUrl(entity.getApplicant().getLinkedinUrl());
+            dto.setApplicantGithubUrl(entity.getApplicant().getGithubUrl());
+            dto.setApplicantFacebookUrl(entity.getApplicant().getFacebookUrl());
+            dto.setApplicantBio(entity.getApplicant().getBio());
+            if (entity.getApplicant().getEspritProfile() != null) {
+                dto.setApplicantGraduationYear(entity.getApplicant().getEspritProfile().getGraduationYear());
+                dto.setApplicantProgram(entity.getApplicant().getEspritProfile().getProgram());
+                dto.setApplicantDegree(entity.getApplicant().getEspritProfile().getDegree());
+                dto.setApplicantFieldOfStudy(entity.getApplicant().getEspritProfile().getFieldOfStudy());
+                dto.setApplicantInstitution(entity.getApplicant().getEspritProfile().getInstitution());
+            }
+        }
         dto.setStatus(entity.getStatus());
         dto.setAppliedAt(entity.getAppliedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
+    }
+
+    private String extractExtension(String fileName) {
+        int index = fileName.lastIndexOf('.');
+        if (index < 0 || index == fileName.length() - 1) {
+            return "";
+        }
+        return fileName.substring(index + 1);
+    }
+
+    private String sanitizeFileName(String fileName) {
+        return FILE_NAME_SAFE_PATTERN.matcher(fileName).replaceAll("_");
     }
 }

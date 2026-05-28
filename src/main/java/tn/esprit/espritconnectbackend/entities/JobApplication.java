@@ -37,7 +37,8 @@ public class JobApplication {
     @Column(name = "cv_url")
     private String cvUrl;
 
-    @Column(name = "cover_letter_url")
+    @Lob
+    @Column(name = "cover_letter_url", columnDefinition = "TEXT")
     private String coverLetterUrl;
 
     @Enumerated(EnumType.STRING)

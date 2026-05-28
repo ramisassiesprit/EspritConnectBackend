@@ -3,6 +3,7 @@ package tn.esprit.espritconnectbackend.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import tn.esprit.espritconnectbackend.dto.MentorMatchDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringRequestDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringSessionDTO;
 import tn.esprit.espritconnectbackend.service.MentorshipService;
@@ -42,6 +43,11 @@ public class MentorshipController {
     @GetMapping("/requests/sent")
     public ResponseEntity<List<MentoringRequestDTO>> getSentRequests() {
         return ResponseEntity.ok(mentorshipService.getMySentRequests());
+    }
+
+    @GetMapping("/recommendations")
+    public ResponseEntity<List<MentorMatchDTO>> getRecommendedMentors(@RequestParam(required = false) UUID userId) {
+        return ResponseEntity.ok(mentorshipService.getRecommendedMentors(userId));
     }
 
     @PostMapping("/sessions")

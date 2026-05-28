@@ -141,7 +141,7 @@ public class JobOfferServiceImpl implements JobOfferService {
     @Transactional
     public void delete(UUID id) {
         JobOffer jobOffer = findOrThrow(id);
-        ensureOwner(jobOffer.getPublisher().getId(), getCurrentUser());
+        ensureOwnerOrAdmin(jobOffer.getPublisher().getId());
         jobOfferRepository.delete(jobOffer);
     }
 

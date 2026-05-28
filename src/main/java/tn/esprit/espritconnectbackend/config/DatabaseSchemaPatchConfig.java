@@ -15,6 +15,20 @@ public class DatabaseSchemaPatchConfig {
     private final JdbcTemplate jdbcTemplate;
 
     @Bean
+    public CommandLineRunner patchUsersAvatarAndBanner() {
+        return args -> {
+            try {
+                // Ensure avatar_url and banner_url use LONGTEXT to accept base64
+                jdbcTemplate.execute("ALTER TABLE users MODIFY COLUMN avatar_url LONGTEXT");
+                jdbcTemplate.execute("ALTER TABLE users MODIFY COLUMN banner_url LONGTEXT");
+                log.info("Patched users.avatar_url and users.banner_url to LONGTEXT via schema patcher");
+            } catch (Exception ex) {
+                log.warn("Unable to patch users avatar/banner to LONGTEXT automatically: {}", ex.getMessage());
+            }
+        };
+    }
+
+    @Bean
     public CommandLineRunner patchJobStatusEnum() {
         return args -> {
             try {

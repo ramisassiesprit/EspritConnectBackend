@@ -35,6 +35,7 @@ public class Event {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", length = 50)
     private EventType eventType;
@@ -90,4 +91,5 @@ public class Event {
 
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EventRegistration> registrations;
+
 }

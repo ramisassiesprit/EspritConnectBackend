@@ -17,6 +17,7 @@ import tn.esprit.espritconnectbackend.entities.enums.GroupPrivacy;
 import tn.esprit.espritconnectbackend.entities.enums.GroupMemberStatus;
 import tn.esprit.espritconnectbackend.entities.enums.GroupStatus;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
+import tn.esprit.espritconnectbackend.entities.enums.UserRole;
 import tn.esprit.espritconnectbackend.repositories.GroupMemberCriteriaRepository;
 import tn.esprit.espritconnectbackend.repositories.GroupMemberRepository;
 import tn.esprit.espritconnectbackend.repositories.GroupRepository;
@@ -528,7 +529,9 @@ public class GroupServiceImpl implements GroupService {
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
         return groupMemberRepository.findByUser(user).stream()
-                .map(m -> mapToDTO(m.getGroup()))
+                .map(GroupMember::getGroup)
+                .filter(group -> group.getStatus() == GroupStatus.APPROVED)
+                .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
 
@@ -551,6 +554,10 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private void checkGroupAdmin(Group group, User user) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
         GroupMember member = groupMemberRepository.findByGroupAndUser(group, user)
                 .orElseThrow(() -> new RuntimeException("Vous n'êtes pas membre de ce groupe"));
 

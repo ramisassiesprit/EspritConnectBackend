@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tn.esprit.espritconnectbackend.dto.BadgeDTO;
 import tn.esprit.espritconnectbackend.dto.UserDTO;
 import tn.esprit.espritconnectbackend.dto.EspritProfileDTO;
@@ -29,6 +30,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final BadgeService badgeService;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserDTO getCurrentUser() {
@@ -125,6 +127,40 @@ public class UserServiceImpl implements UserService {
                 .filter(user -> !user.getEmail().equals(currentEmail))
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public UserDTO createUserByAdmin(UserDTO userDTO) {
+        if (userRepository.findByEmail(userDTO.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Un compte avec cet email existe déjà.");
+        }
+        if (userDTO.getCode() != null && userRepository.findByCode(userDTO.getCode()).isPresent()) {
+            throw new IllegalArgumentException("Un compte avec ce code existe déjà.");
+        }
+
+        User user = new User();
+        user.setFirstName(userDTO.getFirstName());
+        user.setLastName(userDTO.getLastName());
+        user.setEmail(userDTO.getEmail());
+        // Générer un mot de passe aléatoire (non utilisé immédiatement) et le hacher
+        user.setPasswordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        user.setRole(userDTO.getRole() != null ? userDTO.getRole() : UserRole.ETUDIANT);
+        user.setAvatarUrl(userDTO.getAvatarUrl());
+        user.setBannerUrl(userDTO.getBannerUrl());
+        user.setBio(userDTO.getBio());
+        user.setCode(userDTO.getCode());
+        user.setCompanyName(userDTO.getCompanyName());
+        user.setJobTitle(userDTO.getJobTitle());
+        user.setIndustry(userDTO.getIndustry());
+        user.setJobFunction(userDTO.getJobFunction());
+        user.setNumTel(userDTO.getNumTel());
+        user.setStatus(userDTO.getStatus() != null ? userDTO.getStatus() : UserStatus.ACTIVE);
+
+        User savedUser = userRepository.save(user);
+        auditService.logAction("CREATE_USER", "USER", savedUser.getId(), "Création utilisateur par l'admin");
+        badgeService.checkAndAwardBadges(savedUser);
+        return mapToDTO(savedUser);
     }
 
     private UserDTO mapToDTO(User user) {

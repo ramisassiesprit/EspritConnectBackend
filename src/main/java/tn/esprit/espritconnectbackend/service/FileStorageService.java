@@ -92,4 +92,34 @@ public class FileStorageService {
         // Format: uploads/subDir/fileName
         return "uploads/" + subDir + "/" + fileName;
     }
+
+    public String saveCv(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        return saveCvFromBytes(file.getBytes(), file.getOriginalFilename());
+    }
+
+    public String saveCvFromBytes(byte[] fileBytes, String originalFilename) throws IOException {
+        if (fileBytes == null || fileBytes.length == 0) {
+            return null;
+        }
+
+        String subDir = "cvs";
+        Path directoryPath = Paths.get("uploads", subDir);
+        if (!Files.exists(directoryPath)) {
+            Files.createDirectories(directoryPath);
+        }
+
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+
+        String fileName = UUID.randomUUID().toString() + extension;
+        Path filePath = directoryPath.resolve(fileName);
+        Files.write(filePath, fileBytes);
+
+        return "uploads/" + subDir + "/" + fileName;
+    }
 }

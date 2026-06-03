@@ -117,6 +117,12 @@ public class User implements UserDetails {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+    @Column(name = "cv_url", length = 1000)
+    private String cvUrl;
+
+    @Column(name = "cv_keywords", columnDefinition = "TEXT")
+    private String cvKeywords;
+
     // ── Relations ──────────────────────────────────────────────────────────────
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -106,8 +106,8 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new RuntimeException("Comment not found"));
 
         User currentUser = getCurrentUser();
-        if (!comment.getUser().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("You can only delete your own comments");
+        if (!comment.getUser().getId().equals(currentUser.getId()) && currentUser.getRole() != tn.esprit.espritconnectbackend.entities.enums.UserRole.ADMIN) {
+            throw new RuntimeException("You can only delete your own comments or be an admin");
         }
 
         // decrement comments count

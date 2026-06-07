@@ -5,9 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tn.esprit.espritconnectbackend.entities.ResourceFile;
 import tn.esprit.espritconnectbackend.entities.ResourceFolder;
 import tn.esprit.espritconnectbackend.entities.User;
+import tn.esprit.espritconnectbackend.entities.enums.UserRole;
+import tn.esprit.espritconnectbackend.entities.enums.UserStatus;
 import tn.esprit.espritconnectbackend.repositories.ResourceFolderRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 
@@ -23,10 +26,24 @@ public class ResourceBootstrapConfig {
 
     private final ResourceFolderRepository resourceFolderRepository;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Bean
     CommandLineRunner seedResources() {
         return args -> {
+            if (userRepository.findByEmail("admin@esprit.tn").isEmpty()) {
+                User admin = User.builder()
+                        .firstName("Admin")
+                        .lastName("Esprit")
+                        .email("admin@esprit.tn")
+                        .passwordHash(passwordEncoder.encode("admin12345"))
+                        .role(UserRole.ADMIN)
+                        .status(UserStatus.ACTIVE)
+                        .build();
+                userRepository.save(admin);
+                log.info("Default Admin account seeded successfully: admin@esprit.tn / admin12345");
+            }
+
             if (resourceFolderRepository.count() > 0) {
                 return;
             }

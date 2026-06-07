@@ -212,8 +212,8 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
         User currentUser = getCurrentUser();
-        if (!post.getUser().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("You can only delete your own posts");
+        if (!post.getUser().getId().equals(currentUser.getId()) && currentUser.getRole() != tn.esprit.espritconnectbackend.entities.enums.UserRole.ADMIN) {
+            throw new RuntimeException("You can only delete your own posts or be an admin");
         }
 
         postRepository.delete(post);

@@ -23,46 +23,109 @@ public class AnalyticsService {
 
     public Map<String, Object> getSkillsTrend() {
         try {
-            log.info("🔍 [getSkillsTrend] Début de la récupération des tendances de compétences");
+            log.info("🔍 [getSkillsTrend] Début de la récupération des tendances de compétences (skills relationnels + cvKeywords)");
 
-            // Query database for top 5 skills among students and alumni
-            List<Object[]> topSkills = userRepository.findTopSkills(
-                    org.springframework.data.domain.PageRequest.of(0, 5)
+            // 1) Récupération des skills relationnels via la requête optimisée (top by join)
+            List<Object[]> topSkillsFromJoin = userRepository.findTopSkills(org.springframework.data.domain.PageRequest.of(0, 50));
+            log.info("📊 [getSkillsTrend] Compétences relationnelles récupérées (join): {}", topSkillsFromJoin != null ? topSkillsFromJoin.size() : 0);
+
+            // Construire la map de comptage avec les labels originaux
+            Map<String, Long> countMap = new HashMap<>();
+            Map<String, String> displayMap = new HashMap<>(); // ✅ MAP POUR GARDER LES LABELS ORIGINAUX
+
+            if (topSkillsFromJoin != null) {
+                for (Object[] row : topSkillsFromJoin) {
+                    String skillName = (String) row[0];
+                    long cnt = ((Number) row[1]).longValue();
+                    String lowerKey = skillName.toLowerCase(Locale.ROOT).trim();
+                    countMap.put(lowerKey, cnt);
+                    displayMap.put(lowerKey, skillName); // ✅ STOCKE LE NOM ORIGINAL
+                    log.debug("  ├─ Skill original: '{}' | Key: '{}'", skillName, lowerKey);
+                }
+            }
+
+            // 2) Récupérer les cvKeywords des utilisateurs ETUDIANT et ALUMNI
+            List<tn.esprit.espritconnectbackend.entities.enums.UserRole> roles = List.of(
+                    tn.esprit.espritconnectbackend.entities.enums.UserRole.ETUDIANT,
+                    tn.esprit.espritconnectbackend.entities.enums.UserRole.ALUMNI
             );
-            log.info("📊 [getSkillsTrend] Nombre de compétences récupérées: {}", topSkills != null ? topSkills.size() : 0);
+
+            List<tn.esprit.espritconnectbackend.entities.User> users;
+            try {
+                users = userRepository.findByRoleIn(roles);
+            } catch (Exception e) {
+                users = new ArrayList<>();
+                users.addAll(userRepository.findByRole(tn.esprit.espritconnectbackend.entities.enums.UserRole.ETUDIANT));
+                users.addAll(userRepository.findByRole(tn.esprit.espritconnectbackend.entities.enums.UserRole.ALUMNI));
+            }
+            log.info("📄 [getSkillsTrend] Utilisateurs récupérés pour extraction CV keywords: {}", users.size());
+
+            // 3) Tokeniser cvKeywords et compter
+            for (tn.esprit.espritconnectbackend.entities.User u : users) {
+                String cv = u.getCvKeywords();
+                if (cv == null || cv.isBlank()) continue;
+
+                // On ne split que par virgule ou point-virgule pour garder les mots composés (ex: "Spring Boot")
+                String[] tokens = cv.toLowerCase(Locale.ROOT).split("[,;\\n]+");
+
+                for (String t : tokens) {
+                    String token = t.trim().replaceAll("^[^a-z0-9]+|[^a-z0-9+#]+$", ""); // clean edges
+                    if (token.length() <= 2) continue;
+                    countMap.merge(token, 1L, Long::sum);
+                    // ✅ SI LE TOKEN N'EXISTE PAS DANS displayMap, ON LE CAPITALISE
+                    displayMap.putIfAbsent(token, capitalizeToken(token));
+                }
+            }
+
+            log.info("🔢 [getSkillsTrend] Nombre de tokens uniques après fusion: {}", countMap.size());
+
+            // 4) Sort and pick top N (5)
+            int TOP_N = 5;
+            List<Map.Entry<String, Long>> sorted = new ArrayList<>(countMap.entrySet());
+            sorted.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
 
             List<String> labels = new ArrayList<>();
             List<Long> values = new ArrayList<>();
+            int limit = Math.min(TOP_N, sorted.size());
+            for (int i = 0; i < limit; i++) {
+                Map.Entry<String, Long> e = sorted.get(i);
+                String displayLabel = displayMap.getOrDefault(e.getKey(), capitalizeToken(e.getKey())); // ✅ UTILISE LE LABEL ORIGINAL OU CAPITALISÉ
+                labels.add(displayLabel);
+                values.add(e.getValue());
+                log.debug("  ├─ Top {}: '{}' (key: '{}') => {}", i + 1, displayLabel, e.getKey(), e.getValue());
+            }
 
-            if (topSkills != null && !topSkills.isEmpty()) {
-                for (Object[] row : topSkills) {
-                    String skillName = (String) row[0];
-                    Long count = ((Number) row[1]).longValue();
-                    labels.add(skillName);
-                    values.add(count);
-                    log.debug("  ├─ Compétence: '{}' | Nombre d'utilisateurs: {}", skillName, count);
-                }
-            } else {
-                log.warn("⚠️  [getSkillsTrend] Aucune compétence trouvée, utilisation du fallback");
+            // If not enough results, fallback static example
+            if (labels.isEmpty()) {
+                labels = List.of("Spring Boot", "Angular", "React", "Python/AI", "Docker/DevOps");
+                values = List.of(350L, 280L, 210L, 450L, 190L);
+                log.warn("⚠️ [getSkillsTrend] Aucun résultat pertinent trouvé, fallback activé");
             }
 
             Map<String, Object> data = new HashMap<>();
             data.put("labels", labels);
             data.put("values", values);
 
-            log.info("✅ [getSkillsTrend] Résultat final: {} compétences, labels={}, values={}",
-                labels.size(), labels, values);
-
+            log.info("✅ [getSkillsTrend] Résultat final: {} compétences (top {})", labels.size(), TOP_N);
             return data;
         } catch (Exception ex) {
             log.error("❌ [getSkillsTrend] Erreur lors de la récupération des compétences", ex);
             Map<String, Object> fallback = new HashMap<>();
             fallback.put("labels", List.of("Spring Boot", "Angular", "React", "Python/AI", "Docker/DevOps"));
             fallback.put("values", List.of(350L, 280L, 210L, 450L, 190L));
-            log.info("📌 [getSkillsTrend] Fallback activé avec {} compétences", fallback.get("labels"));
             return fallback;
         }
     }
+
+    // helper utilitaire
+    private String capitalizeToken(String token) {
+        if (token == null || token.isBlank()) return token;
+        return java.util.Arrays.stream(token.split("\\s+"))
+                .map(word -> word.length() > 0 ? word.substring(0, 1).toUpperCase(Locale.ROOT) + word.substring(1) : "")
+                .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+
 
     public Map<String, Object> getApplicationsActivity() {
         try {

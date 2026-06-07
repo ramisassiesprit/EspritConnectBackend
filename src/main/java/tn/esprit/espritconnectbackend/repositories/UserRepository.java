@@ -31,4 +31,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT s.name, COUNT(u) FROM User u JOIN u.skills s GROUP BY s.name ORDER BY COUNT(u) DESC")
     List<Object[]> findTopSkills(org.springframework.data.domain.Pageable pageable);
+    List<User> findByRoleIn(List<tn.esprit.espritconnectbackend.entities.enums.UserRole> roles);
 }

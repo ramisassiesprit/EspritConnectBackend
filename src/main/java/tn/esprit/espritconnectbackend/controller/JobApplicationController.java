@@ -46,6 +46,12 @@ public class JobApplicationController {
         return ResponseEntity.ok(jobApplicationService.updateStatus(id, status));
     }
 
+    @PatchMapping("/{id}/regenerate-summary")
+    @Operation(summary = "Régénérer le résumé IA d'une candidature")
+    public ResponseEntity<JobApplicationDTO> regenerateSummary(@PathVariable UUID id) {
+        return ResponseEntity.ok(jobApplicationService.regenerateSummary(id));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Recuperer une candidature")
     public ResponseEntity<JobApplicationDTO> getById(@PathVariable UUID id) {

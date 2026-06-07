@@ -41,6 +41,10 @@ public class JobApplication {
     @Column(name = "cover_letter_url", columnDefinition = "TEXT")
     private String coverLetterUrl;
 
+    @Lob
+    @Column(name = "ai_summary", columnDefinition = "TEXT")
+    private String aiSummary;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

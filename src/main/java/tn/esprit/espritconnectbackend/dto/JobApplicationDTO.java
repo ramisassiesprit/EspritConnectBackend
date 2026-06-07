@@ -35,6 +35,7 @@ public class JobApplicationDTO {
     private String applicantFieldOfStudy;
     private String applicantInstitution;
     private ApplicationStatus status;
+    private String aiSummary;
     private LocalDateTime appliedAt;
     private LocalDateTime updatedAt;
 }

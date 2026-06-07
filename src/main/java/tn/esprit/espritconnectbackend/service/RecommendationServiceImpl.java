@@ -112,7 +112,7 @@ public class RecommendationServiceImpl implements RecommendationService {
         List<String> keywords = extractKeywords(jobContext);
 
         return userRepository.findAll().stream()
-                .filter(u -> u.getRole() == UserRole.ETUDIANT || u.getRole() == UserRole.ALUMNI)
+                .filter(u -> (u.getRole() == UserRole.ETUDIANT || u.getRole() == UserRole.ALUMNI) && u.getRole() != UserRole.ADMIN)
                 .map(user -> {
                     String target = safe(user.getCvKeywords()) + " " + safe(user.getJobTitle()) + " " + safe(user.getIndustry());
                     double score = calculateScore(target, keywords);

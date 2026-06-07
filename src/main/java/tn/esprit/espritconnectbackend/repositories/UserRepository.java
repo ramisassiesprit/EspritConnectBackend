@@ -28,4 +28,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             where u.id <> :currentUserId
             """)
     List<User> findMentorCandidatesForMatching(@Param("currentUserId") UUID currentUserId);
+
+    @Query("SELECT s.name, COUNT(u) FROM User u JOIN u.skills s GROUP BY s.name ORDER BY COUNT(u) DESC")
+    List<Object[]> findTopSkills(org.springframework.data.domain.Pageable pageable);
 }

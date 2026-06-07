@@ -12,6 +12,7 @@ public interface JobApplicationService {
     JobApplicationDTO create(JobApplicationDTO dto);
     JobApplicationDTO update(UUID id, JobApplicationDTO dto);
     JobApplicationDTO updateStatus(UUID id, ApplicationStatus status);
+    JobApplicationDTO regenerateSummary(UUID id);
     JobApplicationDTO getById(UUID id);
     List<JobApplicationDTO> getMine();
     List<JobApplicationDTO> getByJobOffer(UUID jobOfferId);

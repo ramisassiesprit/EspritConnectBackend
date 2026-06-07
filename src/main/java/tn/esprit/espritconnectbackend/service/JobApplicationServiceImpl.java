@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tn.esprit.espritconnectbackend.dto.JobApplicationDTO;
+import tn.esprit.espritconnectbackend.entities.EspritProfile;
 import tn.esprit.espritconnectbackend.entities.JobApplication;
 import tn.esprit.espritconnectbackend.entities.JobOffer;
 import tn.esprit.espritconnectbackend.entities.User;
@@ -19,6 +20,7 @@ import tn.esprit.espritconnectbackend.exception.ResourceNotFoundException;
 import tn.esprit.espritconnectbackend.repositories.JobApplicationRepository;
 import tn.esprit.espritconnectbackend.repositories.JobOfferRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
+import tn.esprit.espritconnectbackend.service.GeminiApiService.AtsAiService;
 
 import java.util.List;
 import java.util.UUID;
@@ -67,6 +69,7 @@ public class JobApplicationServiceImpl implements JobApplicationService {
     private final JobApplicationRepository jobApplicationRepository;
     private final JobOfferRepository jobOfferRepository;
     private final UserRepository userRepository;
+    private final AtsAiService atsAiService;
 
     @Override
     @Transactional
@@ -86,6 +89,16 @@ public class JobApplicationServiceImpl implements JobApplicationService {
         entity.setCvUrl(dto.getCvUrl());
         entity.setCoverLetterUrl(dto.getCoverLetterUrl());
         entity.setStatus(ApplicationStatus.PENDING);
+        
+        // Generate AI Summary
+        String candidateProfile = "Titre: " + applicant.getJobTitle() + "\nBio: " + applicant.getBio();
+        if (applicant.getEspritProfile() != null) {
+            candidateProfile += "\nDiplôme: " + applicant.getEspritProfile().getDegree() + " en " + applicant.getEspritProfile().getFieldOfStudy();
+        }
+        String jobDescription = "Titre: " + jobOffer.getTitle() + "\nDescription: " + jobOffer.getDescription() ;
+        String summary = atsAiService.generateCandidateSummary(candidateProfile, jobDescription);
+        entity.setAiSummary(summary);
+        
         return toDto(jobApplicationRepository.save(entity));
     }
 
@@ -117,6 +130,60 @@ public class JobApplicationServiceImpl implements JobApplicationService {
         entity.setStatus(status);
         return toDto(jobApplicationRepository.save(entity));
     }
+
+    // Dans JobApplicationServiceImpl.java, ligne 135
+@Override
+@Transactional
+public JobApplicationDTO regenerateSummary(UUID id) {
+    JobApplication entity = findOrThrow(id);
+    User applicant = entity.getApplicant();
+    JobOffer jobOffer = entity.getJobOffer();
+
+    // ✅ Réduisez les données: uniquement ce qui est pertinent pour l'ATS
+    StringBuilder candidateData = new StringBuilder();
+
+    if (applicant.getJobTitle() != null && !applicant.getJobTitle().isEmpty()) {
+        candidateData.append("Titre actuel: ").append(applicant.getJobTitle()).append("\n");
+    }
+    if (applicant.getIndustry() != null && !applicant.getIndustry().isEmpty()) {
+        candidateData.append("Secteur: ").append(applicant.getIndustry()).append("\n");
+    }
+    if (applicant.getCvKeywords() != null && !applicant.getCvKeywords().isEmpty()) {
+        candidateData.append("Compétences: ").append(applicant.getCvKeywords()).append("\n");
+    }
+    if (applicant.getEspritProfile() != null) {
+        EspritProfile ep = applicant.getEspritProfile();
+        if (ep.getDegree() != null) {
+            candidateData.append("Diplôme: ").append(ep.getDegree());
+            if (ep.getFieldOfStudy() != null) {
+                candidateData.append(" en ").append(ep.getFieldOfStudy());
+            }
+            candidateData.append("\n");
+        }
+        if (ep.getGraduationYear() != null) {
+            candidateData.append("Année: ").append(ep.getGraduationYear()).append("\n");
+        }
+    }
+
+    StringBuilder jobData = new StringBuilder();
+    jobData.append("Poste: ").append(jobOffer.getTitle()).append("\n");
+    if (jobOffer.getDescription() != null) {
+        // Limit to first 500 chars
+        String desc = jobOffer.getDescription();
+        jobData.append("Description: ").append(desc.length() > 500 ? desc.substring(0, 500) + "..." : desc).append("\n");
+    }
+    if (jobOffer.getTargetFieldsOfStudy() != null && !jobOffer.getTargetFieldsOfStudy().isEmpty()) {
+        jobData.append("Domaines demandés: ").append(jobOffer.getTargetFieldsOfStudy()).append("\n");
+    }
+
+    String summary = atsAiService.generateCandidateSummary(
+        candidateData.toString(),
+        jobData.toString()
+    );
+
+    entity.setAiSummary(summary);
+    return toDto(jobApplicationRepository.save(entity));
+}
 
     @Override
     public JobApplicationDTO getById(UUID id) {
@@ -216,6 +283,7 @@ public class JobApplicationServiceImpl implements JobApplicationService {
             }
         }
         dto.setStatus(entity.getStatus());
+        dto.setAiSummary(entity.getAiSummary());
         dto.setAppliedAt(entity.getAppliedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;

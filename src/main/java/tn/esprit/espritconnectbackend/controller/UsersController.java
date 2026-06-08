@@ -55,12 +55,17 @@ public class UsersController {
     public ResponseEntity<UserDTO> getUserById(@PathVariable UUID userId) {
         return ResponseEntity.ok(userService.getUserById(userId));
     }
+    @GetMapping("/allUsers")
+    public ResponseEntity<List<UserDTO>>getUsers() {
+        return ResponseEntity.ok(userService.getUsers());
+    }
 
     // --- Gestion Admin ---
 
     // @PreAuthorize("hasRole('ADMIN')") - commented out to allow open access
     @GetMapping
     @Operation(summary = "Lister tous les utilisateurs (Admin)")
+    @PreAuthorize("hasRole('ADMIN')") // Only admins can access this endpoint
     public ResponseEntity<List<UserDTO>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }

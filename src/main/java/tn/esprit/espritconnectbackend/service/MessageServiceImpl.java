@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.espritconnectbackend.dto.MessageDTO;
 import tn.esprit.espritconnectbackend.entities.Message;
 import tn.esprit.espritconnectbackend.entities.User;
+import tn.esprit.espritconnectbackend.entities.enums.UserRole;
 import tn.esprit.espritconnectbackend.repositories.MessageRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 
@@ -64,6 +65,9 @@ public class MessageServiceImpl implements MessageService {
     public List<MessageDTO> getConversations(UUID userId) {
         User user = getCurrentUserEntity();
         return messageRepository.findLatestMessagesByUser(user).stream()
+                .filter(
+                        u-> u.getReceiver().getRole() == UserRole.ETUDIANT ||  u.getReceiver().getRole() == UserRole.ALUMNI
+                )
                 .map(m -> {
                     MessageDTO dto = mapToDTO(m);
                     // Determine the other participant
@@ -90,6 +94,33 @@ public class MessageServiceImpl implements MessageService {
         return messageRepository.findByReceiverAndIsReadFalse(user).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
+    }
+    @Override
+    @Transactional
+    public void deleteMessage(UUID messageId, String currentUserEmail) {
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Message non trouvé"));
+
+        if (message.getSender().getEmail().equals(currentUserEmail)) {
+            messageRepository.delete(message);
+        } else {
+            throw new RuntimeException("Action non autorisée");
+        }
+    }
+
+    @Override
+    @Transactional
+    public MessageDTO updateMessage(UUID messageId, MessageDTO messageDTO, String currentUserEmail) {
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Message non trouvé"));
+
+        if (message.getSender().getEmail().equals(currentUserEmail)) {
+            message.setContent(messageDTO.getContent());
+            // Pas besoin de save si @Transactional est actif, l'entité est managée
+            return mapToDTO(message);
+        } else {
+            throw new RuntimeException("Action non autorisée");
+        }
     }
 
     private MessageDTO mapToDTO(Message m) {

@@ -12,6 +12,7 @@ public interface UserService {
     UserDTO getCurrentUser();
     UserDTO updateProfile(UserDTO userDTO);
     UserDTO getUserById(UUID userId);
+    List<UserDTO> getUsers();
     
     // Admin CRUD
     List<UserDTO> getAllUsers();
@@ -20,7 +21,7 @@ public interface UserService {
     void deleteUser(UUID userId);
     List<UserDTO> getOnlineUsers();
     List<UserDTO> getDirectoryUsers();
-    
+
     // Admin: create a user using the existing UserDTO (no separate CreateUserDTO)
     UserDTO createUserByAdmin(UserDTO userDTO);
 }

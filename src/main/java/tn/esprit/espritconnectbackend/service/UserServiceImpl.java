@@ -70,6 +70,15 @@ public class UserServiceImpl implements UserService {
         badgeService.checkAndAwardBadges(savedUser);
         return mapToDTO(savedUser);
     }
+    @Override
+    public List<UserDTO> getUsers() {
+        String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findAll().stream()
+                .filter(user -> !user.getEmail().equals(currentEmail))
+                .filter(user -> user.getRole().equals(UserRole.ETUDIANT)||user.getRole().equals(UserRole.ALUMNI)||user.getRole().equals(UserRole.ENSEIGNANT) ||user.getRole().equals(UserRole.ENTREPRISE))
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
 
     @Override
     public UserDTO getUserById(UUID userId) {
@@ -123,7 +132,6 @@ public class UserServiceImpl implements UserService {
         String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findAll().stream()
                 .filter(user -> user.getRole() != UserRole.ADMIN)
-                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .filter(user -> !user.getEmail().equals(currentEmail))
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());

@@ -61,19 +61,42 @@ public class AnalyticsService {
             log.info("📄 [getSkillsTrend] Utilisateurs récupérés pour extraction CV keywords: {}", users.size());
 
             // 3) Tokeniser cvKeywords et compter
+            // Objectif: normaliser les labels trop verbeux en extrayant des skills canoniques
             for (tn.esprit.espritconnectbackend.entities.User u : users) {
                 String cv = u.getCvKeywords();
                 if (cv == null || cv.isBlank()) continue;
 
-                // On ne split que par virgule ou point-virgule pour garder les mots composés (ex: "Spring Boot")
-                String[] tokens = cv.toLowerCase(Locale.ROOT).split("[,;\\n]+");
+                // split par virgule / point-virgule / saut de ligne
+                String[] tokens = cv.split("[,;\\n]+");
 
                 for (String t : tokens) {
-                    String token = t.trim().replaceAll("^[^a-z0-9]+|[^a-z0-9+#]+$", ""); // clean edges
+                    String raw = t.trim();
+                    if (raw.isBlank()) continue;
+
+                    // normaliser accents et minuscules pour matching
+                    String normalized = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFD)
+                            .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT)
+                            .replace('.', ' ');
+
+                    // clean edges but keep + and # inside tokens
+                    String token = normalized.replaceAll("^[^a-z0-9]+|[^a-z0-9+#\\s]+$", "").trim();
                     if (token.length() <= 2) continue;
-                    countMap.merge(token, 1L, Long::sum);
-                    // ✅ SI LE TOKEN N'EXISTE PAS DANS displayMap, ON LE CAPITALISE
-                    displayMap.putIfAbsent(token, capitalizeToken(token));
+
+                    // 1) extraire tous les skills canoniques présents dans le token (ex: "spring boot postgresql")
+                    List<String> found = extractAllCanonicalSkills(token);
+                    if (!found.isEmpty()) {
+                        for (String canon : found) {
+                            String key = canon.toLowerCase(Locale.ROOT);
+                            countMap.merge(key, 1L, Long::sum);
+                            displayMap.putIfAbsent(key, prettyCanonical(key));
+                        }
+                    } else {
+                        // 2) sinon, créer un label raccourci (1-2 mots significatifs)
+                        String shortKey = shortenLabel(token).toLowerCase(Locale.ROOT);
+                        if (shortKey == null || shortKey.isBlank()) continue;
+                        countMap.merge(shortKey, 1L, Long::sum);
+                        displayMap.putIfAbsent(shortKey, capitalizeToken(shortKey));
+                    }
                 }
             }
 
@@ -123,6 +146,77 @@ public class AnalyticsService {
         return java.util.Arrays.stream(token.split("\\s+"))
                 .map(word -> word.length() > 0 ? word.substring(0, 1).toUpperCase(Locale.ROOT) + word.substring(1) : "")
                 .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    // --- Canonical skills mapping to keep labels short and consistent ---
+    private static final List<String> CANONICAL_SKILLS = List.of(
+            "spring boot", "spring", "postgresql", "postgres", "mysql",
+            "angular", "react", "vue", "python", "java", "kotlin",
+            "docker", "devops", "nodejs", "node.js", "sql", "c#", "c++",
+            "hibernate", "spring data", "graphql", "aws", "azure", "gcp"
+    );
+
+    private static final Map<String, String> CANONICAL_PRETTY = Map.ofEntries(
+            Map.entry("spring boot", "Spring Boot"),
+            Map.entry("spring", "Spring"),
+            Map.entry("postgresql", "PostgreSQL"),
+            Map.entry("postgres", "PostgreSQL"),
+            Map.entry("mysql", "MySQL"),
+            Map.entry("angular", "Angular"),
+            Map.entry("react", "React"),
+            Map.entry("vue", "Vue"),
+            Map.entry("python", "Python"),
+            Map.entry("java", "Java"),
+            Map.entry("kotlin", "Kotlin"),
+            Map.entry("docker", "Docker"),
+            Map.entry("devops", "DevOps"),
+            Map.entry("nodejs", "Node.js"),
+            Map.entry("node.js", "Node.js"),
+            Map.entry("sql", "SQL"),
+            Map.entry("c#", "C#"),
+            Map.entry("c++", "C++"),
+            Map.entry("hibernate", "Hibernate"),
+            Map.entry("spring data", "Spring Data"),
+            Map.entry("graphql", "GraphQL"),
+            Map.entry("aws", "AWS"),
+            Map.entry("azure", "Azure"),
+            Map.entry("gcp", "GCP")
+    );
+
+    // Retourne toutes les skills canoniques trouvées dans le token (tri par longueur pour matcher les plus spécifiques)
+    private List<String> extractAllCanonicalSkills(String token) {
+        if (token == null || token.isBlank()) return Collections.emptyList();
+        return CANONICAL_SKILLS.stream()
+                .sorted((a, b) -> Integer.compare(b.length(), a.length()))
+                .filter(k -> token.contains(k))
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private String prettyCanonical(String canonical) {
+        return CANONICAL_PRETTY.getOrDefault(canonical, capitalizeToken(canonical));
+    }
+
+    // Raccourcir une phrase verbeuse en 1-2 mots significatifs
+    private String shortenLabel(String token) {
+        if (token == null || token.isBlank()) return token;
+        // remove common stop words in French and some verbs/nouns that create verbosity
+        String cleaned = token.replaceAll("\\b(implementation|implémentation|impl|gestion|des|de|du|et|avec|pour|interfaces|client|administration|reservations|réservations|management|gestionnaire)\\b", " ");
+        // garder seulement 2 premiers mots significatifs
+        String[] words = cleaned.trim().split("\\s+");
+        List<String> meaningful = new ArrayList<>();
+        for (String w : words) {
+            w = w.replaceAll("[^a-z0-9+#]", "");
+            if (w.length() <= 2) continue;
+            meaningful.add(w);
+            if (meaningful.size() >= 2) break;
+        }
+        if (meaningful.isEmpty()) {
+            // fallback : premier mot non vide
+            meaningful = Arrays.stream(words).filter(s -> !s.isBlank()).limit(1).collect(Collectors.toList());
+        }
+        String label = String.join(" ", meaningful).trim();
+        return capitalizeToken(label.isBlank() ? token : label);
     }
 
 

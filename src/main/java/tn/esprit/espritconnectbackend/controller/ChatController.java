@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import tn.esprit.espritconnectbackend.dto.MessageDTO;
 import tn.esprit.espritconnectbackend.service.MessageService;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,6 +58,21 @@ public class ChatController {
     @PutMapping("/read/{messageId}")
     public ResponseEntity<Void> markAsRead(@PathVariable UUID messageId) {
         messageService.markAsRead(messageId);
+        return ResponseEntity.noContent().build();
+    }
+    @PutMapping("/{id}")
+    public ResponseEntity<MessageDTO> updateMessage(
+            @PathVariable UUID id,
+            @RequestBody MessageDTO dto,
+            Principal principal) {
+        return ResponseEntity.ok(messageService.updateMessage(id, dto, principal.getName()));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteMessage(
+            @PathVariable UUID id,
+            Principal principal) {
+        messageService.deleteMessage(id, principal.getName());
         return ResponseEntity.noContent().build();
     }
 }

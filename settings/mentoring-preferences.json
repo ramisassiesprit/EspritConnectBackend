@@ -1,0 +1,10 @@
+{
+  "showOfferHelp" : true,
+  "showSeekHelp" : true,
+  "showOfferMentoring" : true,
+  "showSeekMentoring" : true,
+  "offerHelpOptions" : [ "Introduction to connections", "Answer industry specific questions", "Meet for coffee", "Open doors at workplace" ],
+  "seekHelpOptions" : [ "Introduction to connections", "Meet for coffee", "Open doors at workplace", "Answer industry specific questions" ],
+  "offerMentorOptions" : [ "Mentor a young professional", "Resume review", "Internship", "Mentor a student" ],
+  "seekMentorOptions" : [ "Mentor a student", "Resume review", "Internship" ]
+}

@@ -23,7 +23,8 @@ public class InterviewAiService {
 
     private static final String INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
     private static final String MODEL = "mistralai/ministral-14b-instruct-2512";
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper()
+            .configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
 
     public Map<String, Object> generateQuestions(String jobDescription) {
         String prompt = "Tu es un recruteur technique expert. Basé sur cette description de poste : '"

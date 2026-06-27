@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import tn.esprit.espritconnectbackend.dto.HomepageSettingsDto;
+import tn.esprit.espritconnectbackend.dto.JobsSettingsDto;
 import tn.esprit.espritconnectbackend.service.FileStorageService;
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ public class SettingsController {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Path settingsDir = Paths.get("settings");
     private final Path homepageFile = settingsDir.resolve("homepage.json");
+    private final Path jobsFile = settingsDir.resolve("jobs.json");
     private final FileStorageService fileStorageService;
 
     public SettingsController(FileStorageService fileStorageService) {
@@ -46,6 +48,31 @@ public class SettingsController {
 
     @PostMapping("/homepage/banner")
     public ResponseEntity<Map<String, String>> uploadBanner(@RequestParam("file") MultipartFile file) throws IOException {
+        String path = fileStorageService.saveFile(file, "banners");
+        String url = "/" + path;
+        return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    @GetMapping("/jobs")
+    public ResponseEntity<JobsSettingsDto> getJobs() throws IOException {
+        if (Files.notExists(jobsFile)) {
+            return ResponseEntity.ok(new JobsSettingsDto());
+        }
+        JobsSettingsDto dto = mapper.readValue(jobsFile.toFile(), JobsSettingsDto.class);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/jobs")
+    public ResponseEntity<JobsSettingsDto> saveJobs(@RequestBody JobsSettingsDto dto) throws IOException {
+        if (Files.notExists(settingsDir)) {
+            Files.createDirectories(settingsDir);
+        }
+        mapper.writerWithDefaultPrettyPrinter().writeValue(jobsFile.toFile(), dto);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/jobs/banner")
+    public ResponseEntity<Map<String, String>> uploadJobsBanner(@RequestParam("file") MultipartFile file) throws IOException {
         String path = fileStorageService.saveFile(file, "banners");
         String url = "/" + path;
         return ResponseEntity.ok(Map.of("url", url));

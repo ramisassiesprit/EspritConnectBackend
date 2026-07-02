@@ -475,6 +475,8 @@ public class MentorshipServiceImpl implements MentorshipService {
     public MentoringStatsDTO getStats() {
         long totalUsers = userRepository.count();
 
+        List<MentoringRequest> allRequests = requestRepository.findAll();
+
         long totalMentors = allRequests.stream()
                 .map(MentoringRequest::getMentor)
                 .filter(u -> u != null && Boolean.TRUE.equals(u.getIsMentor()))
@@ -539,7 +541,6 @@ public class MentorshipServiceImpl implements MentorshipService {
             requestsByFieldOfStudy.put((String) row[0], (Long) row[1]);
         }
 
-        List<MentoringRequest> allRequests = requestRepository.findAll();
         Map<String, Long> requestsByMonth = new LinkedHashMap<>();
         DateTimeFormatter monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM");
         allRequests.stream()

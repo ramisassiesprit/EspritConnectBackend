@@ -19,6 +19,8 @@ import java.time.MonthDay;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.springframework.scheduling.annotation.Scheduled;
+
 @Service
 @RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
@@ -352,5 +354,15 @@ public class EmailServiceImpl implements EmailService {
             sendBirthdayEmail(user.getEmail(), user.getFirstName());
         }
         return birthdayUsers.size();
+    }
+
+    @Scheduled(cron = "0 0 8 * * *")
+    public void autoSendBirthdayEmails() {
+        try {
+            int sent = sendBirthdayEmailsForToday();
+            System.out.println("Auto birthday email rund completed. Sent: " + sent);
+        } catch (Exception e) {
+            System.err.println("Auto birthday email rund failed: " + e.getMessage());
+        }
     }
 }

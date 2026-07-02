@@ -9,21 +9,30 @@ import tn.esprit.espritconnectbackend.dto.EspritProfileDTO;
 import tn.esprit.espritconnectbackend.dto.MentorMatchDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringRequestDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringSessionDTO;
+import tn.esprit.espritconnectbackend.dto.MentoringStatsDTO;
+import tn.esprit.espritconnectbackend.dto.SessionFeedbackDTO;
+import tn.esprit.espritconnectbackend.dto.TopMentorDTO;
 import tn.esprit.espritconnectbackend.dto.UserDTO;
 import tn.esprit.espritconnectbackend.entities.EspritProfile;
 import tn.esprit.espritconnectbackend.entities.MentoringRequest;
 import tn.esprit.espritconnectbackend.entities.MentoringSession;
 import tn.esprit.espritconnectbackend.entities.User;
+import tn.esprit.espritconnectbackend.entities.WillingToHelp;
 import tn.esprit.espritconnectbackend.entities.enums.MentoringStatus;
 import tn.esprit.espritconnectbackend.entities.enums.NotificationType;
 import tn.esprit.espritconnectbackend.repositories.MentoringRequestRepository;
 import tn.esprit.espritconnectbackend.repositories.MentoringSessionRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
+import tn.esprit.espritconnectbackend.repositories.WillingToHelpRepository;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Locale;
@@ -41,6 +50,7 @@ public class MentorshipServiceImpl implements MentorshipService {
     private final MentoringRequestRepository requestRepository;
     private final MentoringSessionRepository sessionRepository;
     private final UserRepository userRepository;
+    private final WillingToHelpRepository willingToHelpRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
 
@@ -458,6 +468,301 @@ public class MentorshipServiceImpl implements MentorshipService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MentoringStatsDTO getStats() {
+        long totalUsers = userRepository.count();
+
+        List<MentoringRequest> allRequests = requestRepository.findAll();
+
+        long totalMentors = allRequests.stream()
+                .map(MentoringRequest::getMentor)
+                .filter(u -> u != null && Boolean.TRUE.equals(u.getIsMentor()))
+                .distinct()
+                .count();
+
+        long usersOfferingHelp = 0;
+        long usersSeekingHelp = 0;
+        long usersOfferingMentoring = 0;
+        long usersSeekingMentoring = 0;
+
+        Map<String, Long> offerHelpByOption = new HashMap<>();
+        Map<String, Long> seekHelpByOption = new HashMap<>();
+        Map<String, Long> offerMentoringByOption = new HashMap<>();
+        Map<String, Long> seekMentoringByOption = new HashMap<>();
+
+        List<WillingToHelp> allWilling = willingToHelpRepository.findAll();
+        for (WillingToHelp w : allWilling) {
+            if (!isBlank(w.getOfferHelp())) {
+                usersOfferingHelp++;
+                for (String opt : w.getOfferHelp().split(",")) {
+                    String trimmed = opt.trim();
+                    if (!trimmed.isEmpty()) offerHelpByOption.merge(trimmed, 1L, Long::sum);
+                }
+            }
+            if (!isBlank(w.getSeekHelp())) {
+                usersSeekingHelp++;
+                for (String opt : w.getSeekHelp().split(",")) {
+                    String trimmed = opt.trim();
+                    if (!trimmed.isEmpty()) seekHelpByOption.merge(trimmed, 1L, Long::sum);
+                }
+            }
+            if (!isBlank(w.getOfferMentor())) {
+                usersOfferingMentoring++;
+                for (String opt : w.getOfferMentor().split(",")) {
+                    String trimmed = opt.trim();
+                    if (!trimmed.isEmpty()) offerMentoringByOption.merge(trimmed, 1L, Long::sum);
+                }
+            }
+            if (!isBlank(w.getSeekMentor())) {
+                usersSeekingMentoring++;
+                for (String opt : w.getSeekMentor().split(",")) {
+                    String trimmed = opt.trim();
+                    if (!trimmed.isEmpty()) seekMentoringByOption.merge(trimmed, 1L, Long::sum);
+                }
+            }
+        }
+
+        List<Object[]> statusCounts = requestRepository.countByStatusGrouped();
+        Map<String, Long> requestsByStatus = new LinkedHashMap<>();
+        long totalRequests = 0;
+        for (Object[] row : statusCounts) {
+            String status = ((MentoringStatus) row[0]).name();
+            long count = (Long) row[1];
+            requestsByStatus.put(status, count);
+            totalRequests += count;
+        }
+
+        List<Object[]> fieldCounts = requestRepository.countByMenteeFieldOfStudy();
+        Map<String, Long> requestsByFieldOfStudy = new LinkedHashMap<>();
+        for (Object[] row : fieldCounts) {
+            requestsByFieldOfStudy.put((String) row[0], (Long) row[1]);
+        }
+
+        Map<String, Long> requestsByMonth = new LinkedHashMap<>();
+        DateTimeFormatter monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM");
+        allRequests.stream()
+                .collect(Collectors.groupingBy(
+                        r -> r.getRequestedAt().format(monthFormatter),
+                        Collectors.counting()))
+                .entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> requestsByMonth.put(e.getKey(), e.getValue()));
+
+        long totalSessions = sessionRepository.count();
+        Double avgRating = sessionRepository.averageRating();
+
+        List<MentoringSession> allSessions = sessionRepository.findAll();
+
+        // ── New analytics (in-memory) ────────────────────────────────────────
+        List<TopMentorDTO> topMentors = computeTopMentors(allRequests, allSessions);
+        Map<String, Long> ratingDistribution = computeRatingDistribution(allSessions);
+        List<SessionFeedbackDTO> recentFeedback = computeRecentFeedback(allSessions);
+        Map<String, Long> requestsByGraduationYear = computeRequestsByGraduationYear(allRequests);
+        Map<String, Long> requestsByIndustry = computeRequestsByIndustry(allRequests);
+        Map<String, long[]> supplyVsDemand = computeSupplyVsDemand(
+                offerHelpByOption, seekHelpByOption, offerMentoringByOption, seekMentoringByOption);
+
+        return MentoringStatsDTO.builder()
+                .totalUsers(totalUsers)
+                .totalMentors(totalMentors)
+                .usersOfferingHelp(usersOfferingHelp)
+                .usersSeekingHelp(usersSeekingHelp)
+                .usersOfferingMentoring(usersOfferingMentoring)
+                .usersSeekingMentoring(usersSeekingMentoring)
+                .offerHelpPercentage(totalUsers > 0 ? roundTo1((double) usersOfferingHelp / totalUsers * 100) : 0)
+                .seekHelpPercentage(totalUsers > 0 ? roundTo1((double) usersSeekingHelp / totalUsers * 100) : 0)
+                .offerMentoringPercentage(totalUsers > 0 ? roundTo1((double) usersOfferingMentoring / totalUsers * 100) : 0)
+                .seekMentoringPercentage(totalUsers > 0 ? roundTo1((double) usersSeekingMentoring / totalUsers * 100) : 0)
+                .offerHelpByOption(sortByValueDesc(offerHelpByOption))
+                .seekHelpByOption(sortByValueDesc(seekHelpByOption))
+                .offerMentoringByOption(sortByValueDesc(offerMentoringByOption))
+                .seekMentoringByOption(sortByValueDesc(seekMentoringByOption))
+                .totalRequests(totalRequests)
+                .pendingRequests(requestsByStatus.getOrDefault("PENDING", 0L))
+                .acceptedRequests(requestsByStatus.getOrDefault("ACCEPTED", 0L))
+                .rejectedRequests(requestsByStatus.getOrDefault("REJECTED", 0L))
+                .completedRequests(requestsByStatus.getOrDefault("COMPLETED", 0L))
+                .cancelledRequests(requestsByStatus.getOrDefault("CANCELLED", 0L))
+                .requestsByStatus(requestsByStatus)
+                .requestsByMonth(requestsByMonth)
+                .requestsByFieldOfStudy(requestsByFieldOfStudy)
+                .totalSessions(totalSessions)
+                .averageSessionRating(avgRating != null ? roundTo1(avgRating) : null)
+                .topMentors(topMentors)
+                .ratingDistribution(ratingDistribution)
+                .recentFeedback(recentFeedback)
+                .requestsByGraduationYear(requestsByGraduationYear)
+                .requestsByIndustry(requestsByIndustry)
+                .supplyVsDemandByOption(supplyVsDemand)
+                .build();
+    }
+
+    private double roundTo1(double value) {
+        return Math.round(value * 10.0) / 10.0;
+    }
+
+    private Map<String, Long> sortByValueDesc(Map<String, Long> map) {
+        return map.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+    }
+
+    // ── Stats helper methods ───────────────────────────────────────────────────
+
+    /** Top mentors ranked by completed sessions, then acceptance rate, then avg rating. */
+    private List<TopMentorDTO> computeTopMentors(List<MentoringRequest> allRequests,
+                                                 List<MentoringSession> allSessions) {
+        // group sessions by mentor id for completed-session + rating aggregation
+        Map<UUID, List<MentoringSession>> sessionsByMentor = allSessions.stream()
+                .filter(s -> s.getRequest() != null && s.getRequest().getMentor() != null)
+                .collect(Collectors.groupingBy(s -> s.getRequest().getMentor().getId()));
+
+        // group requests received by mentor id
+        Map<UUID, List<MentoringRequest>> requestsByMentor = allRequests.stream()
+                .filter(r -> r.getMentor() != null)
+                .collect(Collectors.groupingBy(r -> r.getMentor().getId()));
+
+        Set<UUID> mentorIds = new HashSet<>();
+        mentorIds.addAll(sessionsByMentor.keySet());
+        mentorIds.addAll(requestsByMentor.keySet());
+
+        List<TopMentorDTO> dtos = new ArrayList<>();
+        for (UUID mentorId : mentorIds) {
+            List<MentoringRequest> reqs = requestsByMentor.getOrDefault(mentorId, List.of());
+            List<MentoringSession> sessions = sessionsByMentor.getOrDefault(mentorId, List.of());
+
+            // need the mentor entity to read names — pull from the first request
+            User mentor = reqs.stream().findFirst().map(MentoringRequest::getMentor)
+                    .or(() -> sessions.stream().findFirst().map(s -> s.getRequest().getMentor()))
+                    .orElse(null);
+            if (mentor == null) continue;
+
+            long accepted = reqs.stream().filter(r -> r.getStatus() == MentoringStatus.ACCEPTED
+                    || r.getStatus() == MentoringStatus.COMPLETED).count();
+            long completed = sessions.size();
+            long totalReceived = reqs.size();
+            double acceptanceRate = totalReceived > 0
+                    ? roundTo1((double) accepted / totalReceived * 100) : 0;
+
+            Double avgRating = sessions.stream()
+                    .map(MentoringSession::getRating)
+                    .filter(r -> r != null && r > 0)
+                    .mapToInt(Integer::intValue)
+                    .average().stream().boxed().findFirst().orElse(null);
+            if (avgRating != null) avgRating = roundTo1(avgRating);
+
+            dtos.add(TopMentorDTO.builder()
+                    .firstName(mentor.getFirstName())
+                    .lastName(mentor.getLastName())
+                    .completedSessions(completed)
+                    .acceptedRequests(accepted)
+                    .totalReceived(totalReceived)
+                    .acceptanceRate(acceptanceRate)
+                    .avgRating(avgRating)
+                    .build());
+        }
+
+        dtos.sort(Comparator.comparing(TopMentorDTO::getCompletedSessions).reversed()
+                .thenComparing(Comparator.comparing(TopMentorDTO::getAcceptanceRate).reversed()));
+
+        return dtos.stream().limit(8).collect(Collectors.toList());
+    }
+
+    /** Distribution of session ratings across 1–5 stars. Missing stars map to 0. */
+    private Map<String, Long> computeRatingDistribution(List<MentoringSession> allSessions) {
+        Map<String, Long> dist = new LinkedHashMap<>();
+        for (int star = 1; star <= 5; star++) {
+            dist.put(String.valueOf(star), 0L);
+        }
+        for (MentoringSession s : allSessions) {
+            Integer r = s.getRating();
+            if (r != null && r >= 1 && r <= 5) {
+                String key = String.valueOf(r);
+                dist.merge(key, 1L, Long::sum);
+            }
+        }
+        return dist;
+    }
+
+    /** Most recent sessions that have feedback text, newest first (max 5). */
+    private List<SessionFeedbackDTO> computeRecentFeedback(List<MentoringSession> allSessions) {
+        return allSessions.stream()
+                .filter(s -> s.getFeedback() != null && !s.getFeedback().trim().isEmpty())
+                .filter(s -> s.getSessionDate() != null)
+                .sorted(Comparator.comparing(MentoringSession::getSessionDate).reversed())
+                .limit(5)
+                .map(s -> SessionFeedbackDTO.builder()
+                        .mentorName(fullName(s.getRequest().getMentor()))
+                        .menteeName(fullName(s.getRequest().getMentee()))
+                        .rating(s.getRating())
+                        .feedback(s.getFeedback())
+                        .sessionDate(s.getSessionDate())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /** Requests grouped by the mentee's graduation year (descending by count). */
+    private Map<String, Long> computeRequestsByGraduationYear(List<MentoringRequest> allRequests) {
+        Map<String, Long> map = new HashMap<>();
+        for (MentoringRequest r : allRequests) {
+            EspritProfile profile = r.getMentee() != null ? r.getMentee().getEspritProfile() : null;
+            if (profile != null && profile.getGraduationYear() != null) {
+                String key = String.valueOf(profile.getGraduationYear());
+                map.merge(key, 1L, Long::sum);
+            }
+        }
+        return sortByValueDesc(map);
+    }
+
+    /** Requests grouped by the mentor's industry (descending by count). */
+    private Map<String, Long> computeRequestsByIndustry(List<MentoringRequest> allRequests) {
+        Map<String, Long> map = new HashMap<>();
+        for (MentoringRequest r : allRequests) {
+            User mentor = r.getMentor();
+            if (mentor != null && !isBlank(mentor.getIndustry())) {
+                map.merge(mentor.getIndustry().trim(), 1L, Long::sum);
+            }
+        }
+        return sortByValueDesc(map);
+    }
+
+    /**
+     * For every option seen across the four willing-to-help buckets, build a
+     * {@code [supply, demand]} pair where supply = offerHelp + offerMentor and
+     * demand = seekHelp + seekMentor.
+     */
+    private Map<String, long[]> computeSupplyVsDemand(Map<String, Long> offerHelp,
+                                                     Map<String, Long> seekHelp,
+                                                     Map<String, Long> offerMentor,
+                                                     Map<String, Long> seekMentor) {
+        Set<String> options = new HashSet<>();
+        options.addAll(offerHelp.keySet());
+        options.addAll(offerMentor.keySet());
+        options.addAll(seekHelp.keySet());
+        options.addAll(seekMentor.keySet());
+
+        Map<String, long[]> result = new LinkedHashMap<>();
+        for (String option : options) {
+            long supply = offerHelp.getOrDefault(option, 0L) + offerMentor.getOrDefault(option, 0L);
+            long demand = seekHelp.getOrDefault(option, 0L) + seekMentor.getOrDefault(option, 0L);
+            result.put(option, new long[]{supply, demand});
+        }
+        return result;
+    }
+
+    private String fullName(User user) {
+        if (user == null) return "Unknown";
+        String first = safe(user.getFirstName());
+        String last = safe(user.getLastName());
+        String name = (first + " " + last).trim();
+        return name.isEmpty() ? "Unknown" : name;
     }
 
     private EspritProfileDTO mapToEspritProfileDTO(EspritProfile profile) {

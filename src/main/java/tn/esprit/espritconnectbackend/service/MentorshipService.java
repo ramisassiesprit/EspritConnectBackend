@@ -3,6 +3,7 @@ package tn.esprit.espritconnectbackend.service;
 import tn.esprit.espritconnectbackend.dto.MentorMatchDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringRequestDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringSessionDTO;
+import tn.esprit.espritconnectbackend.dto.MentoringStatsDTO;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,4 +21,7 @@ public interface MentorshipService {
     // Session management
     MentoringSessionDTO scheduleSession(MentoringSessionDTO sessionDTO);
     List<MentoringSessionDTO> getSessionsByRequest(UUID requestId);
+
+    // Statistics
+    MentoringStatsDTO getStats();
 }

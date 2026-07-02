@@ -1,7 +1,30 @@
 {
-  "displayBanner" : true,
-  "primaryColor" : "#ed1c24",
-  "bannerImageUrl" : "/groupsImages/banners/7823e834-1044-4c69-870b-c0983b06644e.png",
-  "webTiles" : [ "Social media widget", "Catch up + Who's online", "Event", "Jobs (Only)", "Resources", "Recent feed posts" ],
-  "mobileTiles" : [ "Catch up + Who's online", "Event", "Jobs (Only)", "Recent feed posts", "Resources", "Social media widget" ]
+  "ENSEIGNANT" : {
+    "displayBanner" : true,
+    "primaryColor" : "#ed1c24",
+    "bannerImageUrl" : "",
+    "webTiles" : [ ],
+    "mobileTiles" : [ ]
+  },
+  "ETUDIANT" : {
+    "displayBanner" : true,
+    "primaryColor" : "#27ae60",
+    "bannerImageUrl" : "/groupsImages/banners/etudiant/bc1f6cac-9890-401a-83d2-6a13b1564fbd.jpg",
+    "webTiles" : [ "Jobs (Only)", "Event", "Social media widget", "Catch up + Who's online", "Recent feed posts", "Resources" ],
+    "mobileTiles" : [ "Recent feed posts", "Catch up + Who's online" ]
+  },
+  "ENTREPRISE" : {
+    "displayBanner" : true,
+    "primaryColor" : "#ed1c24",
+    "bannerImageUrl" : "",
+    "webTiles" : [ ],
+    "mobileTiles" : [ ]
+  },
+  "ALUMNI" : {
+    "displayBanner" : true,
+    "primaryColor" : "#2980b9",
+    "bannerImageUrl" : "/groupsImages/banners/alumni/bb823ee7-e2dc-4f97-8f6b-43fc0b4a0616.png",
+    "webTiles" : [ "Recent feed posts", "Jobs (Only)" ],
+    "mobileTiles" : [ ]
+  }
 }

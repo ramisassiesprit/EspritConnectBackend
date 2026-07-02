@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import tn.esprit.espritconnectbackend.dto.MentorMatchDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringRequestDTO;
 import tn.esprit.espritconnectbackend.dto.MentoringSessionDTO;
+import tn.esprit.espritconnectbackend.dto.MentoringStatsDTO;
 import tn.esprit.espritconnectbackend.service.MentorshipService;
 
 import java.util.List;
@@ -58,5 +59,10 @@ public class MentorshipController {
     @GetMapping("/requests/{id}/sessions")
     public ResponseEntity<List<MentoringSessionDTO>> getSessions(@PathVariable UUID id) {
         return ResponseEntity.ok(mentorshipService.getSessionsByRequest(id));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<MentoringStatsDTO> getStats() {
+        return ResponseEntity.ok(mentorshipService.getStats());
     }
 }

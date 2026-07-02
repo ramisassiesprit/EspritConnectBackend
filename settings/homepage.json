@@ -1,7 +1,7 @@
 {
   "displayBanner" : true,
-  "primaryColor" : "#27ae60",
-  "bannerImageUrl" : "/groupsImages/banners/2c66f247-7319-4fa5-b1a6-d7963c6416be.png",
+  "primaryColor" : "#ed1c24",
+  "bannerImageUrl" : "/groupsImages/banners/7823e834-1044-4c69-870b-c0983b06644e.png",
   "webTiles" : [ "Social media widget", "Catch up + Who's online", "Event", "Jobs (Only)", "Resources", "Recent feed posts" ],
   "mobileTiles" : [ "Catch up + Who's online", "Event", "Jobs (Only)", "Recent feed posts", "Resources", "Social media widget" ]
 }

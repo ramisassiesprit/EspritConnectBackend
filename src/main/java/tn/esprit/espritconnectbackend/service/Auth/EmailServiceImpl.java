@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
+    private final tn.esprit.espritconnectbackend.service.MailingSettingsService mailingSettingsService;
 
     @Value("${spring.mail.username:noreply@espritconnect.com}")
     private String fromEmail;
@@ -20,6 +21,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendPasswordResetEmail(String to, String token) {
+        if (!mailingSettingsService.getSettings().isAuthEmailsEnabled()) return;
         String resetUrl = frontendUrl + "/reset-password?token=" + token;
         
         try {
@@ -60,6 +62,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendEventNotificationEmail(String to, String eventTitle, String eventDescription, String startAt, String location, String creatorName) {
+        if (!mailingSettingsService.getSettings().isEventEmailsEnabled()) return;
         try {
             jakarta.mail.internet.MimeMessage mimeMessage = mailSender.createMimeMessage();
             org.springframework.mail.javamail.MimeMessageHelper helper = new org.springframework.mail.javamail.MimeMessageHelper(mimeMessage, true, "UTF-8");
@@ -105,6 +108,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendVideoChatEmail(String to, String topic, String message, String date, String meetLink, String senderName) {
+        if (!mailingSettingsService.getSettings().isVideoChatEmailsEnabled()) return;
         try {
             jakarta.mail.internet.MimeMessage mimeMessage = mailSender.createMimeMessage();
             org.springframework.mail.javamail.MimeMessageHelper helper = new org.springframework.mail.javamail.MimeMessageHelper(mimeMessage, true, "UTF-8");
@@ -130,6 +134,44 @@ public class EmailServiceImpl implements EmailService {
             mailSender.send(mimeMessage);
         } catch (Exception e) {
             System.err.println("⚠️ Could not send video chat email: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void sendAdminCustomEmail(java.util.List<String> toEmails, String subject, String message) {
+        if (toEmails == null || toEmails.isEmpty()) return;
+        try {
+            jakarta.mail.internet.MimeMessage mimeMessage = mailSender.createMimeMessage();
+            org.springframework.mail.javamail.MimeMessageHelper helper = new org.springframework.mail.javamail.MimeMessageHelper(mimeMessage, true, "UTF-8");
+            
+            helper.setFrom(fromEmail);
+            
+            // To avoid exposing all emails to every recipient, use BCC
+            String[] bccEmails = toEmails.toArray(new String[0]);
+            helper.setBcc(bccEmails);
+            helper.setSubject(subject);
+
+            String htmlContent = "<div style=\"font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;\">" +
+                    "  <div style=\"text-align: center; border-bottom: 2px solid #C00000; padding-bottom: 20px; margin-bottom: 20px;\">" +
+                    "    <h1 style=\"color: #C00000; margin: 0; font-size: 26px; font-weight: bold;\">Esprit Connect</h1>" +
+                    "  </div>" +
+                    "  <div style=\"padding: 10px 20px; color: #333333; line-height: 1.6;\">" +
+                    "    <p style=\"font-size: 16px; white-space: pre-wrap;\">" + message + "</p>" +
+                    "  </div>" +
+                    "  <div style=\"border-top: 1px solid #eeeeee; padding-top: 20px; margin-top: 20px; text-align: center; font-size: 12px; color: #999999;\">" +
+                    "    <p>© " + java.time.Year.now().getValue() + " Esprit Connect. Tous droits réservés.</p>" +
+                    "  </div>" +
+                    "</div>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            System.err.println("=========================================================================");
+            System.err.println("⚠️ IMPOSSIBLE D'ENVOYER L'EMAIL ADMIN (Aucun serveur SMTP actif)");
+            System.err.println("   Sujet: " + subject);
+            System.err.println("   Message: " + message);
+            System.err.println("   Destinataires: " + toEmails.size());
+            System.err.println("=========================================================================");
         }
     }
 }

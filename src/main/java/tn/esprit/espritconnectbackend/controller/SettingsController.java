@@ -50,4 +50,24 @@ public class SettingsController {
         String url = "/" + path;
         return ResponseEntity.ok(Map.of("url", url));
     }
+
+    private final Path mailingFile = settingsDir.resolve("mailing.json");
+
+    @GetMapping("/mailing")
+    public ResponseEntity<tn.esprit.espritconnectbackend.dto.MailingSettingsDto> getMailingSettings() throws IOException {
+        if (Files.notExists(mailingFile)) {
+            return ResponseEntity.ok(new tn.esprit.espritconnectbackend.dto.MailingSettingsDto());
+        }
+        tn.esprit.espritconnectbackend.dto.MailingSettingsDto dto = mapper.readValue(mailingFile.toFile(), tn.esprit.espritconnectbackend.dto.MailingSettingsDto.class);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/mailing")
+    public ResponseEntity<tn.esprit.espritconnectbackend.dto.MailingSettingsDto> saveMailingSettings(@RequestBody tn.esprit.espritconnectbackend.dto.MailingSettingsDto dto) throws IOException {
+        if (Files.notExists(settingsDir)) {
+            Files.createDirectories(settingsDir);
+        }
+        mapper.writerWithDefaultPrettyPrinter().writeValue(mailingFile.toFile(), dto);
+        return ResponseEntity.ok(dto);
+    }
 }

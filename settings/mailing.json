@@ -1,0 +1,6 @@
+{
+  "authEmailsEnabled" : true,
+  "eventEmailsEnabled" : true,
+  "mentoringEmailsEnabled" : true,
+  "videoChatEmailsEnabled" : false
+}

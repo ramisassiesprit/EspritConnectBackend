@@ -737,13 +737,25 @@ public class EventServiceImpl implements EventService {
         }
         return String.join(",", set);
     }
+    private static final int MAX_COVER_URL_BYTES = 2 * 1024 * 1024; // 2 MB
+
     private void applyAllowedEventFields(Event event, EventDTO dto, boolean isCreate) {
         event.setTitle(dto.getTitle());
         event.setDescription(dto.getDescription());
         event.setStartAt(dto.getStartAt());
         event.setEndAt(dto.getEndAt());
         event.setLocation(dto.getLocation());
-        event.setCoverUrl(dto.getCoverUrl());
+
+        // Validate coverUrl size to avoid MySQL max_allowed_packet errors
+        String coverUrl = dto.getCoverUrl();
+        if (coverUrl != null && coverUrl.startsWith("data:") && coverUrl.length() > MAX_COVER_URL_BYTES) {
+            throw new IllegalArgumentException(
+                "L'image de couverture est trop volumineuse (" +
+                (coverUrl.length() / 1024) + " KB). La taille maximale autorisée est 2 MB. " +
+                "Veuillez compresser l'image ou utiliser une URL externe."
+            );
+        }
+        event.setCoverUrl(coverUrl);
 
         // capacity validation
         if (dto.getCapacity() != null) {

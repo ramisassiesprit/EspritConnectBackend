@@ -52,7 +52,6 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendPasswordResetEmail(String to, String token) {
-        if (!mailingSettingsService.getSettings().isAuthEmailsEnabled()) return;
         String resetUrl = frontendUrl + "/reset-password?token=" + token;
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
@@ -160,6 +159,54 @@ public class EmailServiceImpl implements EmailService {
         }
 
         return emailHistoryRepository.save(history);
+    }
+
+    @Override
+    public void sendAdminCustomEmail(List<String> emails, String subject, String message) {
+        for (String email : emails) {
+            try {
+                MimeMessage mimeMessage = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+                helper.setFrom(fromEmail);
+                helper.setTo(email);
+                helper.setSubject(subject);
+
+                StringBuilder html = new StringBuilder();
+                html.append("<div style=\"font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:8px;background:#ffffff;\">");
+                html.append("<div style=\"text-align:center;border-bottom:2px solid #C00000;padding-bottom:20px;margin-bottom:20px;\">");
+                html.append("<h1 style=\"color:#C00000;margin:0;font-size:26px;font-weight:bold;\">Esprit Connect</h1></div>");
+                html.append("<div style=\"padding:10px 20px;color:#333;line-height:1.6;\">");
+                html.append(message.replace("\n", "<br/>"));
+                html.append("</div>");
+                html.append("<div style=\"border-top:1px solid #eee;padding-top:20px;margin-top:20px;text-align:center;font-size:12px;color:#999;\">");
+                html.append("<p>© ").append(java.time.Year.now().getValue()).append(" Esprit Connect.</p></div></div>");
+
+                helper.setText(html.toString(), true);
+                mailSender.send(mimeMessage);
+
+                emailHistoryRepository.save(EmailHistory.builder()
+                        .recipientEmail(email)
+                        .subject(subject)
+                        .messageBody(message)
+                        .emailType("ADMIN")
+                        .sentAt(LocalDateTime.now())
+                        .sentBy("ADMIN")
+                        .status("SENT")
+                        .build());
+            } catch (Exception e) {
+                System.err.println("Admin custom email failed to " + email + ": " + e.getMessage());
+                emailHistoryRepository.save(EmailHistory.builder()
+                        .recipientEmail(email)
+                        .subject(subject)
+                        .messageBody(message)
+                        .emailType("ADMIN")
+                        .sentAt(LocalDateTime.now())
+                        .sentBy("ADMIN")
+                        .status("FAILED")
+                        .errorMessage(e.getMessage())
+                        .build());
+            }
+        }
     }
 
     @Override

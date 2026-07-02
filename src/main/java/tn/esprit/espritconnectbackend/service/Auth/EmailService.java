@@ -11,6 +11,7 @@ public interface EmailService {
     void sendVideoChatEmail(String to, String topic, String message, String date, String meetLink, String senderName);
 
     EmailHistory sendCustomEmail(String to, String subject, String message, String imageUrl, String sentBy);
+    void sendAdminCustomEmail(List<String> emails, String subject, String message);
     void sendBirthdayEmail(String to, String firstName);
     List<EmailHistory> getEmailHistory();
     Map<String, Object> getEmailStats();

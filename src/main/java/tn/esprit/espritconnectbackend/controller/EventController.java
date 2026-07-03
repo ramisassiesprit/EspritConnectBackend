@@ -41,8 +41,23 @@ public class EventController {
     }
 
     @GetMapping
-    public ResponseEntity<List<EventDTO>> getAllEvents() {
+    public ResponseEntity<List<EventDTO>> getAllEvents(@RequestParam(required = false) UUID groupId) {
+        if (groupId != null) {
+            return ResponseEntity.ok(eventService.getEventsByGroup(groupId));
+        }
         return ResponseEntity.ok(eventService.getAllEvents());
+    }
+
+    // ── Group Events ───────────────────────────────────────────────────────────
+
+    @GetMapping("/groups/{groupId}")
+    public ResponseEntity<List<EventDTO>> getEventsByGroup(@PathVariable UUID groupId) {
+        return ResponseEntity.ok(eventService.getEventsByGroup(groupId));
+    }
+
+    @PostMapping("/groups/{groupId}")
+    public ResponseEntity<EventDTO> createGroupEvent(@PathVariable UUID groupId, @RequestBody EventDTO eventDTO) {
+        return ResponseEntity.ok(eventService.createGroupEvent(groupId, eventDTO));
     }
 
     @PostMapping("/{id}/register")

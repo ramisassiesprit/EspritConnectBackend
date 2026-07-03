@@ -8,10 +8,12 @@ import java.util.UUID;
 
 public interface EventService {
     EventDTO createEvent(EventDTO eventDTO);
+    EventDTO createGroupEvent(UUID groupId, EventDTO eventDTO);
     EventDTO updateEvent(UUID eventId, EventDTO eventDTO);
     void deleteEvent(UUID eventId);
     EventDTO getEventById(UUID eventId);
     List<EventDTO> getAllEvents();
+    List<EventDTO> getEventsByGroup(UUID groupId);
     
     // Registration management
     EventRegistrationDTO registerToEvent(UUID eventId);

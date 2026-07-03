@@ -21,6 +21,7 @@ public class EventDTO {
     private EventType eventType;
     private EventStatus status;
     private UUID creatorId;
+    private UUID groupId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Double matchScore;

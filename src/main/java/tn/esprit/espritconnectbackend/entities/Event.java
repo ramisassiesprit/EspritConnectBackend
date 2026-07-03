@@ -87,6 +87,10 @@ public class Event {
         this.updatedAt = LocalDateTime.now();
     }
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    private Group group;
+
     // ── Relations ──────────────────────────────────────────────────────────────
 
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)

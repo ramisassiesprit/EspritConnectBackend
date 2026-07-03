@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface EventRepository extends JpaRepository<Event, UUID> {
+    List<Event> findByGroupId(UUID groupId);
     List<Event> findByStatusIn(List<EventStatus> statuses);
     List<Event> findTop3ByOrderByRegisteredCountDesc();
     // Statistics queries

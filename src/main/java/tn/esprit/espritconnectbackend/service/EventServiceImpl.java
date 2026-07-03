@@ -10,6 +10,7 @@ import tn.esprit.espritconnectbackend.dto.EventDTO;
 import tn.esprit.espritconnectbackend.dto.EventRegistrationDTO;
 import tn.esprit.espritconnectbackend.entities.Event;
 import tn.esprit.espritconnectbackend.entities.EventRegistration;
+import tn.esprit.espritconnectbackend.entities.Group;
 import tn.esprit.espritconnectbackend.entities.User;
 import tn.esprit.espritconnectbackend.entities.enums.*;
 import tn.esprit.espritconnectbackend.entities.Badge;
@@ -18,6 +19,7 @@ import tn.esprit.espritconnectbackend.repositories.BadgeRepository;
 import tn.esprit.espritconnectbackend.repositories.UserBadgeRepository;
 import tn.esprit.espritconnectbackend.repositories.EventRegistrationRepository;
 import tn.esprit.espritconnectbackend.repositories.EventRepository;
+import tn.esprit.espritconnectbackend.repositories.GroupRepository;
 import tn.esprit.espritconnectbackend.repositories.UserRepository;
 import tn.esprit.espritconnectbackend.service.Auth.EmailService;
 
@@ -38,6 +40,7 @@ public class EventServiceImpl implements EventService {
     private final EmailService emailService;
     private final BadgeRepository badgeRepository;
     private final UserBadgeRepository userBadgeRepository;
+    private final GroupRepository groupRepository;
 
     private User getCurrentUserEntity() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -90,6 +93,14 @@ public class EventServiceImpl implements EventService {
         Event event = new Event();
         applyAllowedEventFields(event, eventDTO, true);
         event.setCreator(creator);
+
+        // If groupId is provided, associate the event with the group
+        if (eventDTO.getGroupId() != null) {
+            Group group = groupRepository.findById(eventDTO.getGroupId())
+                    .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+            event.setGroup(group);
+        }
+
         if (creator.getRole() == UserRole.ADMIN) {
             event.setStatus(EventStatus.UPCOMING);
         } else {
@@ -104,6 +115,41 @@ public class EventServiceImpl implements EventService {
         }
 
         return mapToDTO(savedEvent);
+    }
+
+    @Override
+    @Transactional
+    public EventDTO createGroupEvent(UUID groupId, EventDTO eventDTO) {
+        User creator = getCurrentUserEntity();
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Groupe non trouvé"));
+
+        Event event = new Event();
+        applyAllowedEventFields(event, eventDTO, true);
+        event.setCreator(creator);
+        event.setGroup(group);
+        if (creator.getRole() == UserRole.ADMIN) {
+            event.setStatus(EventStatus.UPCOMING);
+        } else {
+            event.setStatus(EventStatus.PENDING);
+        }
+
+        Event savedEvent = eventRepository.save(event);
+        auditService.logAction("CREATE_GROUP_EVENT", "EVENT", savedEvent.getId(), "Événement créé dans le groupe: " + group.getGroupName());
+
+        if (savedEvent.getStatus() == EventStatus.UPCOMING) {
+            notifyAllUsersOfEvent(savedEvent);
+        }
+
+        return mapToDTO(savedEvent);
+    }
+
+    @Override
+    @Transactional
+    public List<EventDTO> getEventsByGroup(UUID groupId) {
+        return eventRepository.findByGroupId(groupId).stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -797,6 +843,7 @@ public class EventServiceImpl implements EventService {
         dto.setEventType(event.getEventType());
         dto.setStatus(event.getStatus());
         dto.setCreatorId(event.getCreator().getId());
+        dto.setGroupId(event.getGroup() != null ? event.getGroup().getId() : null);
         dto.setCreatedAt(event.getCreatedAt());
         dto.setUpdatedAt(event.getUpdatedAt());
         return dto;

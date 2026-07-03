@@ -84,6 +84,9 @@ public class Group {
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Post> posts;
 
+    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Event> events;
+
     @PreUpdate
     private void onUpdate() {
         this.updatedAt = LocalDateTime.now();
